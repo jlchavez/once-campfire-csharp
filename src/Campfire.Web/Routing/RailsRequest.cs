@@ -193,7 +193,8 @@ public sealed partial class RailsRequest : IDisposable
         }
     }
 
-    // valid_accept_header
+    // valid_accept_header, with `strict_accept_header` on (load_defaults 8.2): a browser's Accept
+    // with */* is negotiated like any other.
     bool HasValidAcceptHeader()
     {
         var accept = Context.Request.Headers.Accept.ToString();
@@ -224,8 +225,6 @@ public sealed partial class RailsRequest : IDisposable
 
     [GeneratedRegex("XMLHttpRequest", RegexOptions.IgnoreCase)]
     private static partial Regex XmlHttpRequest();
-
-
 
     // format_from_path_extension
     [GeneratedRegex(@"\.(\w+)\z")]

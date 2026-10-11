@@ -1,22 +1,16 @@
 # Regenerates routes.json: what the reference's router does beyond vectors/campfire_routes.json,
 # which pins the route table and recognition but not route names or URL generation. This draws the
 # same routes.rb files with Action Pack from the revisions the reference pins (reference/Gemfile.lock:
-# rails/rails 1a02651, turbo-rails 30cd8fc, rack 3.2.6), checks the table equals
+# rails/rails e3d5c56, turbo-rails 30cd8fc, rack 3.2.7), checks the table equals
 # campfire_routes.json, and records every named route's path helper over a spread of arguments,
-# the direct routes, PublicExceptions' JSON and XML bodies, and request.formats.
+# the direct routes, PublicExceptions' JSON and XML bodies, and request.formats. The reference
+# image has those gems, so run it there:
 #
-#   git clone --filter=blob:none https://github.com/rails/rails && git -C rails checkout 1a02651
-#   git clone --filter=blob:none https://github.com/hotwired/turbo-rails && git -C turbo-rails checkout 30cd8fc
-#   cat > Gemfile <<GEMFILE
-#   source "https://rubygems.org"
-#   gem "activesupport", path: "rails/activesupport"
-#   gem "actionview", path: "rails/actionview"
-#   gem "actionpack", path: "rails/actionpack"
-#   gem "rack", "3.2.6"
-#   GEMFILE
-#   bundle install
-#   RAILS_DIR=rails TURBO_DIR=turbo-rails bundle exec ruby \
-#     tests/Campfire.Web.Tests/Routing/Vectors/generate.rb > tests/Campfire.Web.Tests/Routing/Vectors/routes.json
+#   gems=/usr/local/bundle/ruby/4.0.0/bundler/gems
+#   docker run --rm -v "$PWD:/work" -e RAILS_DIR=$gems/rails-e3d5c569d217 \
+#     -e TURBO_DIR=$gems/turbo-rails-30cd8fcc6f82 --entrypoint sh campfire-reference:edbc779 \
+#     -c 'cd /rails && bundle exec ruby /work/tests/Campfire.Web.Tests/Routing/Vectors/generate.rb' \
+#     > tests/Campfire.Web.Tests/Routing/Vectors/routes.json
 Encoding.default_external = Encoding::UTF_8
 require "json"
 require "action_controller"
@@ -50,6 +44,12 @@ end
 
 Record = Struct.new(:id, :updated_at, :avatar_token) do
   def to_param = id.to_s
+end
+
+# Active Storage's routes.rb reads this setting (active_storage.rb), which the app leaves at its
+# default.
+module ActiveStorage
+  mattr_accessor :draw_direct_upload_route, default: true
 end
 
 # The order bin/rails routes lists them in: the app, then the engines' route files, drawn into one
@@ -177,7 +177,9 @@ public_exceptions = [ 400, 404, 405, 406, 413, 422, 500, 501 ].map do |status|
   { status: status, json: body.to_json, xml: body.to_xml }
 end
 
-# request.formats, with turbo-rails' type registered as its engine does.
+# request.formats, with turbo-rails' type registered as its engine does, and the strict Accept
+# header that the reference's `config.load_defaults 8.2` turns on.
+ActionDispatch::Request.strict_accept_header = true
 Mime::Type.register "text/vnd.turbo-stream.html", :turbo_stream
 ACCEPTS = [
   nil, "", "*/*", "text/html", "application/json", "text/vnd.turbo-stream.html, text/html, application/xhtml+xml",

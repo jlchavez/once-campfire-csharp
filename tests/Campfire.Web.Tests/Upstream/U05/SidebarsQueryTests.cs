@@ -21,7 +21,7 @@ public sealed class SidebarsQueryTests : IDisposable
     {
         await messages.Database.ReadAsync(session =>
         {
-            var directs = Memberships.ForUserWithDirectRooms(session, david, visibleOnly: true);
+            var directs = Memberships.VisibleForUserWithDirectRooms(session, david);
             Assert.NotEmpty(directs);
             // Verify that directs are ordered by updated_at descending
             for (var i = 0; i < directs.Count - 1; i++)
@@ -41,7 +41,7 @@ public sealed class SidebarsQueryTests : IDisposable
     {
         await messages.Database.ReadAsync(session =>
         {
-            var shared = Memberships.ForUserWithOrderedSharedRooms(session, david, visibleOnly: true);
+            var shared = Memberships.VisibleForUserWithOrderedRoomWithoutDirectRooms(session, david);
             Assert.NotEmpty(shared);
             // Verify that shared rooms are ordered by name ascending
             for (var i = 0; i < shared.Count - 1; i++)

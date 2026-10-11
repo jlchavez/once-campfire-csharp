@@ -228,8 +228,8 @@ public abstract partial class Controller
         StartResponse();
     }
 
-    // ActionDispatch::Response.create: config.action_dispatch.default_headers (load_defaults 7.1).
-    // ActionController::Live builds its response with Live::Response.new, which has none.
+    // ActionDispatch::Response.create: config.action_dispatch.default_headers (load_defaults 8.2).
+    // ActionController::Live's Live::Response.create gets them too.
     void StartResponse()
     {
         Headers["X-Frame-Options"] = "SAMEORIGIN";
@@ -283,6 +283,7 @@ public abstract partial class Controller
         }
         var accept = Header("Accept");
         var present = !string.IsNullOrWhiteSpace(accept);
+        // valid_accept_header with `strict_accept_header` on (load_defaults 8.2).
         return Request.IsXhr ? (present || HasContentMimeType()) : present;
     }
 
@@ -384,5 +385,4 @@ public abstract partial class Controller
 
     [GeneratedRegex(@"[^A-Za-z0-9\-._~:/?#\[\]@!$&'()*+,;=%]")]
     private static partial Regex InvalidUriCharacter();
-
 }

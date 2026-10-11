@@ -22,6 +22,7 @@ public sealed class AccountsLogosController : ApplicationController
 
     // `include ActiveStorage::Streaming`, which includes ActionController::Live.
     protected override bool IsLive => true;
+
     /// <summary><c>Current.account.logo.destroy</c>, then back to the settings.</summary>
     public static readonly RequestDelegate Destroy = Action(Chain, async c =>
     {

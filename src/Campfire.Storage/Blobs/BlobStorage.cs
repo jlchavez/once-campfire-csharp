@@ -3,7 +3,6 @@ using System.Text.Json.Nodes;
 using Campfire.Data.Sqlite;
 using Campfire.RailsCompat.Crypto;
 using Campfire.RailsCompat.Params;
-using Campfire.Storage.Media;
 
 namespace Campfire.Storage.Blobs;
 
@@ -139,20 +138,11 @@ public sealed class BlobStorage
     {
         ArgumentNullException.ThrowIfNull(tx);
         ArgumentNullException.ThrowIfNull(staged);
-        AnalyzeStaged(staged);
         var replaced = Detach(tx, recordType, recordId, name, touchRecord);
         var blob = Create(tx, staged, now);
         var attachment = BlobRecords.InsertAttachment(tx.Session, name, recordType, recordId, blob.Id, now);
         touchRecord?.Invoke(tx);
         return new AttachedBlob(blob, attachment, replaced);
-    }
-
-    static void AnalyzeStaged(StagedBlob staged)
-    {
-        var path = staged.Service.PathFor(staged.Blob.Key);
-        var tempBlob = new Blob(0, staged.Blob.Key, staged.Blob.Filename, staged.Blob.ContentType, staged.Blob.Metadata, staged.Blob.ServiceName, staged.Blob.ByteSize, staged.Blob.Checksum, DateTimeOffset.MinValue);
-        var analyzed = BlobAnalyzer.Analyze(tempBlob, path);
-        staged.UpdateMetadata(analyzed);
     }
 
     /// <summary>

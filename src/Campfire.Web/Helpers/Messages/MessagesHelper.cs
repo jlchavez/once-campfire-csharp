@@ -79,6 +79,12 @@ public partial class View
         return sentence.Length > 0 ? sentence : forUserName;
     }
 
+    /// <summary>
+    /// <c>cache_message_actions(message) do ... end</c> (reference/app/helpers/messages_helper.rb):
+    /// the block's output. Rails may serve it from its fragment store, whose bytes are the same.
+    /// </summary>
+    public static IHtml CacheMessageActions(Action body) => Render(_ => body());
+
     // The template version: bump this when the message presentation filters change so every
     // cached fragment is invalidated. Must match the comment in _message.html.erb.cs.
     const int messageFragmentVersion = 5;

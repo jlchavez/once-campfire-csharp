@@ -405,6 +405,7 @@ public sealed partial class AvatarsControllerTests : IDisposable
             {
                 if (change!["row"] is JsonObject row)
                 {
+                    AnalyzedMetadata.WithoutLibVips(table, row);
                     IEnumerable<string> random = table == "active_storage_blobs" && !compareBytes ? [.. RandomColumns, "checksum", "byte_size"] : RandomColumns;
                     foreach (var column in random.Where(column => row[column] is not null))
                     {

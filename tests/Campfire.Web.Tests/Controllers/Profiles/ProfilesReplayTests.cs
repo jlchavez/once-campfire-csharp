@@ -370,12 +370,13 @@ public sealed partial class ProfilesReplayTests : IDisposable
 
     static JsonObject Placeholders(JsonObject changes)
     {
-        foreach (var (_, rows) in changes)
+        foreach (var (table, rows) in changes)
         {
             foreach (var change in rows!.AsArray())
             {
                 if (change!["row"] is JsonObject row)
                 {
+                    AnalyzedMetadata.WithoutLibVips(table, row);
                     foreach (var column in RandomColumns.Where(column => row[column] is not null))
                     {
                         row[column] = "<random>";

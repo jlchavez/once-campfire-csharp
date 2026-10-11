@@ -82,9 +82,11 @@ public sealed class ClosedIssueRequestsTests : IDisposable
         Assert.Contains(purges, p => p.BlobId == blobId);
     }
 
-    // (3) #24: attaching an avatar or account logo enqueues AnalyzeBlobJob unless already analyzed.
+    // (3) #24: attaching an avatar or account logo analyzes it, enqueuing AnalyzeBlobJob unless it's
+    // already analyzed. Since load_defaults 8.2 (`analyze: :immediately`) an upload is analyzed
+    // before it's saved, so it needs no job; an existing, unanalyzed blob still gets one.
     [Fact]
-    public async Task FirstRun_attaching_avatar_enqueues_AnalyzeBlobJob()
+    public async Task FirstRun_attaching_avatar_analyzes_it_without_a_job()
     {
         using var cleanApp = new MessagesApp(app.Now);
         using (var conn = cleanApp.Open())
@@ -119,12 +121,12 @@ public sealed class ClosedIssueRequestsTests : IDisposable
         var response = await cleanApp.SendAsync("POST", "/first_run", headers, body, contentType);
 
         Assert.Equal(302, response.Status);
-        var analyze = Assert.Single(cleanApp.Seams.Jobs.OfType<AnalyzeBlobJob>());
-        Assert.True(analyze.BlobId > 0);
+        Assert.Empty(cleanApp.Seams.Jobs.OfType<AnalyzeBlobJob>());
+        AssertNewestBlobAnalyzed(cleanApp);
     }
 
     [Fact]
-    public async Task Users_create_attaching_avatar_enqueues_AnalyzeBlobJob()
+    public async Task Users_create_attaching_avatar_analyzes_it_without_a_job()
     {
         var account = (await app.Database.ReadAsync(Accounts.First, TestContext.Current.CancellationToken))!;
         var fileBytes = File.ReadAllBytes(Path.Combine(VectorFiles.Root, "reference/test/fixtures/files/earth.png"));
@@ -137,12 +139,12 @@ public sealed class ClosedIssueRequestsTests : IDisposable
         var response = await app.SendAsync("POST", $"/join/{account.JoinCode}", headers, body, contentType);
 
         Assert.Equal(302, response.Status);
-        var analyze = Assert.Single(app.Seams.Jobs.OfType<AnalyzeBlobJob>());
-        Assert.True(analyze.BlobId > 0);
+        Assert.Empty(app.Seams.Jobs.OfType<AnalyzeBlobJob>());
+        AssertNewestBlobAnalyzed(app);
     }
 
     [Fact]
-    public async Task Users_profiles_update_with_uploaded_avatar_enqueues_AnalyzeBlobJob()
+    public async Task Users_profiles_update_with_uploaded_avatar_analyzes_it_without_a_job()
     {
         var headers = app.SignedIn(david);
         var fileBytes = File.ReadAllBytes(Path.Combine(VectorFiles.Root, "reference/test/fixtures/files/earth.png"));
@@ -153,8 +155,8 @@ public sealed class ClosedIssueRequestsTests : IDisposable
         var response = await app.SendAsync("PATCH", $"/users/{davidId}/profile", headers, body, contentType);
 
         Assert.Equal(302, response.Status);
-        var analyze = Assert.Single(app.Seams.Jobs.OfType<AnalyzeBlobJob>());
-        Assert.True(analyze.BlobId > 0);
+        Assert.Empty(app.Seams.Jobs.OfType<AnalyzeBlobJob>());
+        AssertNewestBlobAnalyzed(app);
     }
 
     [Fact]
@@ -176,7 +178,7 @@ public sealed class ClosedIssueRequestsTests : IDisposable
     }
 
     [Fact]
-    public async Task Accounts_bots_create_and_update_with_avatar_enqueues_AnalyzeBlobJob()
+    public async Task Accounts_bots_create_and_update_with_avatar_analyzes_it_without_a_job()
     {
         var headers = app.SignedIn(david);
         var fileBytes = File.ReadAllBytes(Path.Combine(VectorFiles.Root, "reference/test/fixtures/files/earth.png"));
@@ -188,8 +190,8 @@ public sealed class ClosedIssueRequestsTests : IDisposable
         var createResponse = await app.SendAsync("POST", "/account/bots", headers, createBody, createContentType);
 
         Assert.Equal(302, createResponse.Status);
-        var analyzeCreate = Assert.Single(app.Seams.Jobs.OfType<AnalyzeBlobJob>());
-        Assert.True(analyzeCreate.BlobId > 0);
+        Assert.Empty(app.Seams.Jobs.OfType<AnalyzeBlobJob>());
+        AssertNewestBlobAnalyzed(app);
 
         var botId = (long)app.Scalar("SELECT MAX(id) FROM users WHERE role = 2")!;
 
@@ -201,12 +203,12 @@ public sealed class ClosedIssueRequestsTests : IDisposable
         var updateResponse = await app.SendAsync("PATCH", $"/account/bots/{botId}", headers, updateBody, updateContentType);
 
         Assert.Equal(302, updateResponse.Status);
-        var analyzeUpdate = Assert.Single(app.Seams.Jobs.OfType<AnalyzeBlobJob>());
-        Assert.True(analyzeUpdate.BlobId > 0);
+        Assert.Empty(app.Seams.Jobs.OfType<AnalyzeBlobJob>());
+        AssertNewestBlobAnalyzed(app);
     }
 
     [Fact]
-    public async Task Accounts_update_with_logo_enqueues_AnalyzeBlobJob()
+    public async Task Accounts_update_with_logo_analyzes_it_without_a_job()
     {
         var headers = app.SignedIn(david);
         var fileBytes = File.ReadAllBytes(Path.Combine(VectorFiles.Root, "reference/test/fixtures/files/earth.png"));
@@ -217,8 +219,8 @@ public sealed class ClosedIssueRequestsTests : IDisposable
         var response = await app.SendAsync("PATCH", "/account", headers, body, contentType);
 
         Assert.Equal(302, response.Status);
-        var analyze = Assert.Single(app.Seams.Jobs.OfType<AnalyzeBlobJob>());
-        Assert.True(analyze.BlobId > 0);
+        Assert.Empty(app.Seams.Jobs.OfType<AnalyzeBlobJob>());
+        AssertNewestBlobAnalyzed(app);
     }
 
     // (5) #16: CookieJar emits only deletion vs both Set-Cookie headers in order.
@@ -251,6 +253,9 @@ public sealed class ClosedIssueRequestsTests : IDisposable
         Assert.Equal(davidId, disconnect.UserId);
         Assert.True(disconnect.Reconnect);
     }
+
+    static void AssertNewestBlobAnalyzed(MessagesApp targetApp) =>
+        Assert.Contains("\"analyzed\":true", (string)targetApp.Scalar("SELECT metadata FROM active_storage_blobs ORDER BY id DESC LIMIT 1")!, StringComparison.Ordinal);
 
     static (byte[] Body, string ContentType) MultipartForm(string fileField, string filename, string partContentType, byte[] fileBytes, (string Name, string Value)[] fields)
     {

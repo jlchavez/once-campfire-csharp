@@ -467,6 +467,7 @@ public sealed partial class AccountsControllerTests : IDisposable
             {
                 if (change!["row"] is JsonObject row)
                 {
+                    AnalyzedMetadata.WithoutLibVips(table, row);
                     IEnumerable<string> random = SqliteStampedTables.Contains(table) ? [.. RandomColumns, "created_at", "updated_at"] : RandomColumns;
                     if (table == "active_storage_blobs" && !compareBytes)
                     {

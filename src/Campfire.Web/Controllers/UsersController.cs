@@ -104,6 +104,8 @@ public sealed class UsersController : ApplicationController
         var now = Now;
 
         using var staged = avatar is null ? null : App.RequireStorage().Stage(avatar);
+        // The attachment's `before_validation` analysis (analyze: :immediately).
+        staged?.AnalyzeWithoutSaving();
         return await WriteAsync(tx =>
         {
             // users.name is NOT NULL: a missing name fails here, as ActiveRecord::NotNullViolation does.

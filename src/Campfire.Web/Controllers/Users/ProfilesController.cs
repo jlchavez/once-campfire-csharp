@@ -62,6 +62,8 @@ public sealed class UsersProfilesController : ApplicationController
         var now = Now;
 
         using var staged = avatar is AvatarChange.Upload upload ? App.RequireStorage().Stage(upload.File) : null;
+        // The attachment's `before_validation` analysis (analyze: :immediately).
+        staged?.AnalyzeWithoutSaving();
         await WriteAsync(tx =>
         {
             Users.Update(tx.Session, user, now,

@@ -73,6 +73,8 @@ public sealed class AccountsController : ApplicationController
     {
         var logo = attributes.TryGetValue("logo", out var logoParam) ? Logo(logoParam) : null;
         using var staged = logo?.Upload is { } upload ? app.RequireStorage().Stage(upload) : null;
+        // The attachment's `before_validation` analysis (analyze: :immediately).
+        staged?.AnalyzeWithoutSaving();
         await app.Database.WriteAsync(tx =>
         {
             var account = Accounts.First(tx.Session) ?? throw new InvalidOperationException("undefined method 'update!' for nil");

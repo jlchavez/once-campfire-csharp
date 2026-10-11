@@ -74,6 +74,8 @@ public sealed class AccountsBotsController : ApplicationController
         var now = Now;
 
         using var staged = avatar is null ? null : App.RequireStorage().Stage(avatar);
+        // The attachment's `before_validation` analysis (analyze: :immediately).
+        staged?.AnalyzeWithoutSaving();
         await WriteAsync(tx =>
         {
             var created = UserLifecycle.Create(tx, name!, emailAddress: null, passwordDigest: null, now, role: UserRole.Bot, bio: null, botToken: User.GenerateBotToken());
@@ -129,6 +131,8 @@ public sealed class AccountsBotsController : ApplicationController
         var (b, now) = (CurrentBot, Now);
 
         using var staged = avatar is null ? null : App.RequireStorage().Stage(avatar);
+        // The attachment's `before_validation` analysis (analyze: :immediately).
+        staged?.AnalyzeWithoutSaving();
         await WriteAsync(tx =>
         {
             if (!string.IsNullOrWhiteSpace(webhookUrl))

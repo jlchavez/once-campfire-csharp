@@ -26,31 +26,235 @@
     ]
   },
   {
-    "query": "Users.ActiveOrderedWithoutBots",
-    "args": [],
+    "query": "Users.VisibleToOrderedWithRole",
+    "args": [
+      127326141,
+      0
+    ],
+    "result": [
+      773523953,
+      712064548,
+      773523958,
+      773523955
+    ]
+  },
+  {
+    "query": "Users.VisibleToOrderedWithRole",
+    "args": [
+      127326141,
+      1
+    ],
     "result": [
       127326141,
+      149087659
+    ]
+  },
+  {
+    "query": "Users.VisibleToOrderedWithRole",
+    "args": [
       149087659,
+      0
+    ],
+    "result": [
+      773523953,
+      712064548,
+      773523958,
+      773523955
+    ]
+  },
+  {
+    "query": "Users.VisibleToOrderedWithRole",
+    "args": [
+      149087659,
+      1
+    ],
+    "result": [
+      127326141,
+      149087659
+    ]
+  },
+  {
+    "query": "Users.VisibleToOrderedWithRole",
+    "args": [
+      394959859,
+      0
+    ],
+    "result": [
       773523953,
       712064548,
       773523958
     ]
   },
   {
-    "query": "Users.WithStatusesOrderedWithoutBots",
+    "query": "Users.VisibleToOrderedWithRole",
     "args": [
-      [
-        0,
-        2
-      ]
+      394959859,
+      1
     ],
     "result": [
       127326141,
-      149087659,
+      149087659
+    ]
+  },
+  {
+    "query": "Users.VisibleToOrderedWithRole",
+    "args": [
+      712064548,
+      0
+    ],
+    "result": [
       773523953,
       712064548,
+      773523958
+    ]
+  },
+  {
+    "query": "Users.VisibleToOrderedWithRole",
+    "args": [
+      712064548,
+      1
+    ],
+    "result": [
+      127326141,
+      149087659
+    ]
+  },
+  {
+    "query": "Users.VisibleToOrderedWithRole",
+    "args": [
+      773523953,
+      0
+    ],
+    "result": [
+      773523953,
+      712064548,
+      773523958
+    ]
+  },
+  {
+    "query": "Users.VisibleToOrderedWithRole",
+    "args": [
+      773523953,
+      1
+    ],
+    "result": [
+      127326141,
+      149087659
+    ]
+  },
+  {
+    "query": "Users.VisibleToOrderedWithRole",
+    "args": [
+      773523954,
+      0
+    ],
+    "result": [
+      773523953,
+      712064548,
+      773523958
+    ]
+  },
+  {
+    "query": "Users.VisibleToOrderedWithRole",
+    "args": [
+      773523954,
+      1
+    ],
+    "result": [
+      127326141,
+      149087659
+    ]
+  },
+  {
+    "query": "Users.VisibleToOrderedWithRole",
+    "args": [
+      773523955,
+      0
+    ],
+    "result": [
+      773523953,
+      712064548,
+      773523958
+    ]
+  },
+  {
+    "query": "Users.VisibleToOrderedWithRole",
+    "args": [
+      773523955,
+      1
+    ],
+    "result": [
+      127326141,
+      149087659
+    ]
+  },
+  {
+    "query": "Users.VisibleToOrderedWithRole",
+    "args": [
+      773523956,
+      0
+    ],
+    "result": [
+      773523953,
+      712064548,
+      773523958
+    ]
+  },
+  {
+    "query": "Users.VisibleToOrderedWithRole",
+    "args": [
+      773523956,
+      1
+    ],
+    "result": [
+      127326141,
+      149087659
+    ]
+  },
+  {
+    "query": "Users.VisibleToOrderedWithRole",
+    "args": [
+      773523957,
+      0
+    ],
+    "result": [
+      773523953,
+      712064548,
+      773523958
+    ]
+  },
+  {
+    "query": "Users.VisibleToOrderedWithRole",
+    "args": [
+      773523957,
+      1
+    ],
+    "result": [
+      127326141,
+      149087659
+    ]
+  },
+  {
+    "query": "Users.VisibleToOrderedWithRole",
+    "args": [
       773523958,
-      773523955
+      0
+    ],
+    "result": [
+      773523953,
+      712064548,
+      773523958
+    ]
+  },
+  {
+    "query": "Users.VisibleToOrderedWithRole",
+    "args": [
+      773523958,
+      1
+    ],
+    "result": [
+      127326141,
+      149087659
     ]
   },
   {

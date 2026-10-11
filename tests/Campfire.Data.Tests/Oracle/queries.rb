@@ -28,8 +28,10 @@ messages = Message.order(:id).to_a
 
 record["Users.ActiveOrdered", [], ids[User.active.ordered]]
 record["Users.ActiveIds", [], User.active.pluck(:id)]
-record["Users.ActiveOrderedWithoutBots", [], ids[User.active.ordered.without_bots]]
-record["Users.WithStatusesOrderedWithoutBots", [ [ 0, 2 ] ], ids[User.where(status: [ :active, :banned ]).ordered.without_bots]]
+users.each do |viewer|
+  record["Users.VisibleToOrderedWithRole", [ viewer.id, 0 ], ids[User.visible_to(viewer).ordered.member]]
+  record["Users.VisibleToOrderedWithRole", [ viewer.id, 1 ], ids[User.visible_to(viewer).ordered.administrator]]
+end
 record["Users.ActiveBotsOrdered", [], ids[User.active_bots.ordered]]
 users.each do |user|
   record["Users.Find", [ user.id ], user.id]

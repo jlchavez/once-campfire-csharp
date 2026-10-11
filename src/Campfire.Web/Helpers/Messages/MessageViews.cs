@@ -24,7 +24,10 @@ public sealed class MessageViews(KeyGenerator keys, Func<string, string> toPlain
         ArgumentNullException.ThrowIfNull(messages);
         var ids = messages.Select(message => message.Id).ToList();
         var bodies = RichTexts.ForRecords(session, Message.ModelName, "body", ids).ToDictionary(richText => richText.RecordId, richText => richText.Body);
-        var boosts = messages.ToDictionary(message => message.Id, message => Boosts.ForMessageOrdered(session, message.Id));
+        // `with_boosts` preloads every message's boosts at once, and messages/boosts/_boosts sorts the
+        // loaded ones by `created_at` (b6d3075); the preload's id order breaks ties.
+        var preloaded = Boosts.ForMessages(session, ids).ToLookup(boost => boost.MessageId);
+        var boosts = messages.ToDictionary(message => message.Id, message => preloaded[message.Id].OrderBy(boost => boost.CreatedAt).ToList());
         var userIds = messages.Select(message => message.CreatorId).Concat(boosts.Values.SelectMany(list => list.Select(boost => boost.BoosterId))).Distinct().ToList();
         var users = Users.WhereIds(session, userIds).ToDictionary(user => user.Id, User);
         var rooms = new Dictionary<long, MessageRoom?>();

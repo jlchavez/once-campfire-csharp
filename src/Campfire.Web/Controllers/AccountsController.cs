@@ -1,4 +1,3 @@
-using System.Globalization;
 using Campfire.Data.MessageAttachments;
 using Campfire.Data.Queries;
 using Campfire.Data.Records;
@@ -30,17 +29,20 @@ public sealed class AccountsController : ApplicationController
 
     public static readonly RequestDelegate Update = Action(Chain, c => c.UpdateAsync());
 
+    // `edit`: every administrator `User.visible_to(Current.user)` sees, then one page of members
+    // (`set_page_and_extract_portion_from users.member, per_page: 500`).
     async ValueTask EditAsync()
     {
         var viewer = Current.User ?? throw new InvalidOperationException("undefined method 'can_administer?' for nil");
         var lastRoomId = (await LastRoomVisitedAsync().ConfigureAwait(false))?.Id;
-        var pageNumber = PageNumber(Params["page"]);
+        var pageNumber = GearedPage.NumberFrom(Params["page"]);
         await this.RenderActionAsync((view, session, w) =>
         {
             var account = Accounts.First(session) ?? throw new InvalidOperationException("undefined method 'name' for nil");
-            // `account_users.ordered.without_bots`, split into administrators and members.
-            var users = AccountUsers(session, viewer).Select(user => new AccountUserRow(user, TransferableUser.GenerateAvatarSignedId(App.Keys, user.Id))).ToList();
-            var page = new AccountEditPage(
+            var administrators = Users.VisibleToOrderedWithRole(session, viewer, UserRole.Administrator);
+            var members = Users.VisibleToOrderedWithRole(session, viewer, UserRole.Member);
+            var page = new GearedPage(pageNumber, members.Count, UsersPerPage);
+            view.AccountsEdit(w, new AccountEditPage(
                 View.AccountFormModel(account),
                 Routes.AccountPath(new() { { "format", account.Id } }),
                 account.Name,
@@ -48,12 +50,13 @@ public sealed class AccountsController : ApplicationController
                 account.SettingsData.RestrictRoomCreationToAdministrators,
                 viewer.IsAdministrator,
                 lastRoomId,
-                [.. users.Where(row => row.User.IsAdministrator)],
-                [.. users.Where(row => !row.User.IsAdministrator).Skip((int)((pageNumber - 1) * UsersPerPage)).Take(UsersPerPage)],
-                pageNumber == PageCount(users.Count(row => !row.User.IsAdministrator)) ? null : pageNumber + 1);
-            view.AccountsEdit(w, page);
+                [.. administrators.Select(Row)],
+                [.. page.Portion(members).Select(Row)],
+                page.IsLast ? null : page.NextParam));
         }).ConfigureAwait(false);
     }
+
+    AccountUserRow Row(User user) => new(user, TransferableUser.GenerateAvatarSignedId(App.Keys, user.Id));
 
     // `@account.update!(account_params)`, then back to the settings with a "✓".
     async ValueTask UpdateAsync()
@@ -111,49 +114,6 @@ public sealed class AccountsController : ApplicationController
         {
             BlobRecords.DeleteAttachment(tx.Session, attachment.Id);
         }
-    }
-
-    // `account_users`: administrators also see banned people (User.visible_to).
-    static List<User> AccountUsers(SqliteSession session, User viewer) =>
-        Users.VisibleToOrderedWithoutBots(session, viewer);
-
-    // GearedPagination::Recordset#page_count with one ratio of 500.
-    static long PageCount(int records) => Math.Max(1, (records + UsersPerPage - 1) / UsersPerPage);
-
-    // GearedPagination's `page_number_from(params[:page])`: `param.to_i`, else page 1.
-    static long PageNumber(object? param)
-    {
-        var number = param switch
-        {
-            null => 0,
-            string text => StringToI(text),
-            _ => throw new InvalidOperationException($"undefined method 'to_i' for an instance of {ParamValues.RubyClassName(param)}"),
-        };
-        return number > 0 ? number : 1;
-    }
-
-    // Ruby's String#to_i: leading whitespace, a sign, then digits (underscores between them).
-    static long StringToI(string text)
-    {
-        var span = text.AsSpan().TrimStart();
-        var digits = new System.Text.StringBuilder();
-        var at = 0;
-        if (at < span.Length && span[at] is '+' or '-')
-        {
-            digits.Append(span[at++]);
-        }
-        for (; at < span.Length; at++)
-        {
-            if (char.IsAsciiDigit(span[at]))
-            {
-                digits.Append(span[at]);
-            }
-            else if (span[at] != '_' || at + 1 >= span.Length || !char.IsAsciiDigit(span[at + 1]) || at == 0 || !char.IsAsciiDigit(span[at - 1]))
-            {
-                break;
-            }
-        }
-        return long.TryParse(digits.ToString(), NumberStyles.AllowLeadingSign, CultureInfo.InvariantCulture, out var value) ? value : 0;
     }
 
     // `logo = value`: an upload attaches; nil and "" detach (Attached::Changes::DeleteOne).

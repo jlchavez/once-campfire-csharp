@@ -51,8 +51,7 @@ public class QueryOracleTests
     {
         ["Users.ActiveOrdered"] = (s, a, _) => Ids(Users.ActiveOrdered(s)),
         ["Users.ActiveIds"] = (s, a, _) => Ids(Users.ActiveIds(s)),
-        ["Users.ActiveOrderedWithoutBots"] = (s, a, _) => Ids(Users.ActiveOrderedWithoutBots(s)),
-        ["Users.WithStatusesOrderedWithoutBots"] = (s, a, _) => Ids(Users.WithStatusesOrderedWithoutBots(s, [.. LongList(a[0]).Select(status => (UserStatus)status)])),
+        ["Users.VisibleToOrderedWithRole"] = (s, a, _) => Ids(Users.VisibleToOrderedWithRole(s, Users.Find(s, Long(a[0]))!, (UserRole)Long(a[1]))),
         ["Users.ActiveBotsOrdered"] = (s, a, _) => Ids(Users.ActiveBotsOrdered(s)),
         ["Users.Find"] = (s, a, _) => Id(Users.Find(s, Long(a[0]))),
         ["Users.FindActive"] = (s, a, _) => Id(Users.FindActive(s, Long(a[0]))),

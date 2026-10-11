@@ -1,4 +1,3 @@
-<% FragmentCache(w, boost.Id, boost.CreatedAt, () => { %>
 <div id="<%= RecordIdentifier.DomId(boost.Record) %>"
     class="boost boost-item flex-inline postion--relative max-width align-center fill-white gap"
     data-controller="boost-delete" data-boost-delete-perform-class="boost--deleting" data-boost-delete-reveal-class="expanded" data-boost-delete-booster-id-value="<%= boost.Booster!.Id %>">
@@ -17,4 +16,3 @@
   <% }) %>
 </div>
 <span id="delete_boost_accessible_label" class="for-screen-reader">Press enter to delete this boost</span>
-<% }); %>

@@ -46,16 +46,25 @@ public static class MessageSearch
         var ids = probed.Where(row => row.Reachable).Select(row => row.Id).Take(Limit).ToList();
 
         // A scoped fallback preserves older reachable hits behind a large private history.
-        var messages = ids.Count < Limit && probed.Count == probeSize
-            ? LastPageOfMatches(session, userId, terms)
-            : WithIds(session, userId, terms, ids);
+        if (ids.Count < Limit && probed.Count == probeSize)
+        {
+            return LastPageOfMatches(session, userId, query);
+        }
+        var messages = WithIds(session, userId, terms, ids);
         messages.Reverse();
         return messages;
     }
 
-    // `relation.last_page_of_matches(100)`: `reorder("idx.rowid")`, last hundred.
-    static List<Message> LastPageOfMatches(SqliteSession session, long userId, string terms) =>
-        session.Query($"{reachable} ORDER BY idx.rowid DESC LIMIT {limitText}", Message.Read, ("@user_id", userId), ("@query", terms));
+    // `user.reachable_messages.search(query).last_page_of_matches(size)`: `reorder("idx.rowid")`,
+    // so SQLite walks the index newest first and stops at the page, oldest first.
+    public static List<Message> LastPageOfMatches(SqliteSession session, long userId, string query, int size = Limit)
+    {
+        ArgumentNullException.ThrowIfNull(session);
+        ArgumentNullException.ThrowIfNull(query);
+        var messages = session.Query($"{reachable} ORDER BY idx.rowid DESC LIMIT @size", Message.Read, ("@user_id", userId), ("@query", MatchTerms(query)), ("@size", size));
+        messages.Reverse();
+        return messages;
+    }
 
     // `Page.load(relation.where(id: ids).reorder(:id), :last, 100)`
     static List<Message> WithIds(SqliteSession session, long userId, string terms, List<long> ids)

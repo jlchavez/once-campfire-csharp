@@ -35,14 +35,14 @@ public class SearchOracleTests
     }
 
     // The acceptance criterion: for every user in the parity seed and every present query of the
-    // corpus (FTS syntax errors and mixed scripts included), the same ids in the same order, or
-    // the same SQLite error.
+    // corpus (FTS operator words and mixed scripts included), the same ids in the same order, or
+    // the same SQLite error. Operator words are searched as words since f2bdfde, so none fails.
     [Fact]
     public async Task Searches_find_what_rails_finds_or_fail_as_it_fails()
     {
         var searches = Cases("searches");
         Assert.True(searches.Count > 5000);
-        Assert.Contains(searches, c => c!["error"] is not null);
+        Assert.Contains(searches, c => c!["q"]!.GetValue<string>() == "AND");
 
         using var file = TestDatabase.FromParitySeed();
         using var database = SqliteDatabase.Open(new SqliteDatabaseOptions(file.Path) { Readers = 1 });
@@ -50,7 +50,8 @@ public class SearchOracleTests
     }
 
     // The seed has no `created_at` ties and no query reaching `last_page_of(100)`; the oracle's
-    // crowded room has both, its messages indexed by the reference's `create_in_index`, here by
+    // crowded room has both, and a private room with more matches than the 1000-row accessible
+    // probe, its messages indexed by the reference's `create_in_index`, here by
     // Lifecycle/MessageSearchIndex's.
     [Fact]
     public async Task A_crowded_room_pages_and_breaks_ties_like_rails()

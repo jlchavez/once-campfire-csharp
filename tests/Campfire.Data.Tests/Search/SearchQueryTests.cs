@@ -1,32 +1,27 @@
-using System.Globalization;
 using System.Text;
-using System.Text.RegularExpressions;
 using Campfire.Data.Searching;
 
 namespace Campfire.Data.Tests.Searching;
 
 // SearchQuery, SearchesController#query's port.
-public partial class SearchQueryTests
+public class SearchQueryTests
 {
-    // Oracle/search_word.rb generated WordRanges from a Ruby 3.4.10 built from its tag;
-    // reference-rust's table came from the reference image's. Ruby 3.3's differs (no U+200C,
-    // U+200D), so this pins the version too.
+    // Oracle/search_word.rb generated WordRanges inside the reference image, from the Ruby
+    // reference/.ruby-version pins. Each Ruby's table differs (Ruby 3.3's has no U+200C or U+200D,
+    // Ruby 3.4's stops at Unicode 15.0), so this pins the version and the size.
     [Fact]
     public void Word_ranges_are_the_reference_rubys()
     {
-        var rust = File.ReadAllText(Path.Combine(TestDatabase.RepositoryRoot, "reference-rust", "crates", "campfire", "src", "integrations", "search", "word_ranges.rs"));
-        Assert.Contains("Ruby 3.4.10", rust, StringComparison.Ordinal);
-        var expected = RustRange().Matches(rust)
-            .SelectMany(match => new[] { Hex(match.Groups[1].Value), Hex(match.Groups[2].Value) })
-            .ToArray();
-        Assert.Equal(771 * 2, expected.Length);
-        Assert.Equal(expected, WordRanges.Pairs.ToArray());
+        var ruby = File.ReadAllText(Path.Combine(TestDatabase.RepositoryRoot, "reference", ".ruby-version")).Trim();
+        var generated = File.ReadAllText(Path.Combine(TestDatabase.RepositoryRoot, "src", "Campfire.Data", "Search", "WordRanges.cs"));
+        Assert.Contains($"from Ruby {ruby} (Unicode", generated, StringComparison.Ordinal);
+        Assert.Equal(802 * 2, WordRanges.Pairs.Length);
     }
 
-    [GeneratedRegex(@"\(0x([0-9A-F]+), 0x([0-9A-F]+)\)")]
-    private static partial Regex RustRange();
-
-    static int Hex(string text) => int.Parse(text, NumberStyles.HexNumber, CultureInfo.InvariantCulture);
+    // Letters Unicode 16 and 17 added, which Ruby 4.0.7's /[[:word:]]/ matches.
+    [Theory]
+    [InlineData(0x1437A), InlineData(0x14148), InlineData(0x2EDF0)]
+    public void Newer_unicode_letters_are_word_characters(int codePoint) => Assert.True(SearchQuery.IsWord(new Rune(codePoint)));
 
     // Probed against the reference's Ruby: alphabetic (including letter numbers and circled
     // letters), marks, decimal digits, connector punctuation and join controls.

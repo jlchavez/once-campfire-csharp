@@ -104,6 +104,8 @@ users.each do |user|
   record["Memberships.ForUser", [ user.id ], ids[user.memberships]]
   record["Memberships.ForUserWithOrderedRoom", [ user.id, false ], ids[user.memberships.with_ordered_room]]
   record["Memberships.ForUserWithOrderedRoom", [ user.id, true ], ids[user.memberships.visible.with_ordered_room]]
+  record["Memberships.VisibleForUserWithDirectRooms", [ user.id ], ids[user.memberships.visible.with_direct_rooms]]
+  record["Memberships.VisibleForUserWithOrderedRoomWithoutDirectRooms", [ user.id ], ids[user.memberships.visible.with_ordered_room.without_direct_rooms]]
   record["Memberships.CountUnreadForUser", [ user.id ], user.memberships.unread.count]
   record["Memberships.CountForUserWithoutDirectRooms", [ user.id ], user.memberships.without_direct_rooms.count]
   direct_ids = user.rooms.directs.pluck(:id)

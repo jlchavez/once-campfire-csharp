@@ -55,7 +55,7 @@ public static class MessagePages
         ArgumentNullException.ThrowIfNull(excluding);
         var (placeholders, parameters) = Sql.List("id", excluding);
         var without = excluding.Count == 0 ? "" : $" AND \"messages\".\"id\" NOT IN ({placeholders})";
-        return Last(session, $"{inRoom}{without} AND (updated_at > @time) ORDER BY +\"messages\".\"created_at\" DESC LIMIT {pageSizeText}",
+        return Last(session, $"{inRoom}{without} AND (updated_at > @time) ORDER BY +messages.created_at DESC LIMIT {pageSizeText}",
             [("@room_id", roomId), .. parameters, ("@time", Db.Time(time))]);
     }
 

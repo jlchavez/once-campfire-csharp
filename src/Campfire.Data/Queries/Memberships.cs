@@ -72,27 +72,21 @@ public static class Memberships
             ("@user_id", userId));
     }
 
-    // `user.memberships.visible.with_direct_rooms` (users/sidebars_controller.rb):
-    // memberships with direct rooms, ordered by `rooms.updated_at DESC`.
-    public static List<(Membership Membership, Room Room)> ForUserWithDirectRooms(SqliteSession session, long userId, bool visibleOnly = true)
-    {
-        var condition = visibleOnly ? $" AND {visible}" : "";
-        return session.Query(
-            $"SELECT {Membership.Columns}, {Room.Columns} FROM \"memberships\" INNER JOIN \"rooms\" ON \"rooms\".\"id\" = \"memberships\".\"room_id\" WHERE \"memberships\".\"user_id\" = @user_id AND \"rooms\".\"type\" = @type{condition} ORDER BY \"rooms\".\"updated_at\" DESC",
+    // `user.memberships.visible.with_direct_rooms` (users/sidebars_controller.rb): each visible
+    // membership of a direct room with its room, most recently updated room first.
+    public static List<(Membership Membership, Room Room)> VisibleForUserWithDirectRooms(SqliteSession session, long userId) =>
+        session.Query(
+            $"SELECT {Membership.Columns}, {Room.Columns} FROM \"memberships\" INNER JOIN \"rooms\" ON \"rooms\".\"id\" = \"memberships\".\"room_id\" WHERE \"memberships\".\"user_id\" = @user_id AND {visible} AND \"rooms\".\"type\" = @type ORDER BY \"rooms\".\"updated_at\" DESC",
             reader => (Membership.Read(reader), Room.ReadAt(reader, 9)),
             ("@user_id", userId), ("@type", RoomTypes.DirectClassName));
-    }
 
     // `user.memberships.visible.with_ordered_room.without_direct_rooms` (users/sidebars_controller.rb):
-    // memberships with non-direct rooms, ordered by `LOWER(rooms.name)`.
-    public static List<(Membership Membership, Room Room)> ForUserWithOrderedSharedRooms(SqliteSession session, long userId, bool visibleOnly = true)
-    {
-        var condition = visibleOnly ? $" AND {visible}" : "";
-        return session.Query(
-            $"SELECT {Membership.Columns}, {Room.Columns} FROM \"memberships\" INNER JOIN \"rooms\" ON \"rooms\".\"id\" = \"memberships\".\"room_id\" WHERE \"memberships\".\"user_id\" = @user_id AND \"rooms\".\"type\" != @type{condition} ORDER BY LOWER(rooms.name)",
+    // each visible membership of any other room with its room, by `LOWER(rooms.name)`.
+    public static List<(Membership Membership, Room Room)> VisibleForUserWithOrderedRoomWithoutDirectRooms(SqliteSession session, long userId) =>
+        session.Query(
+            $"SELECT {Membership.Columns}, {Room.Columns} FROM \"memberships\" INNER JOIN \"rooms\" ON \"rooms\".\"id\" = \"memberships\".\"room_id\" WHERE \"memberships\".\"user_id\" = @user_id AND {visible} AND \"rooms\".\"type\" != @type ORDER BY LOWER(rooms.name)",
             reader => (Membership.Read(reader), Room.ReadAt(reader, 9)),
             ("@user_id", userId), ("@type", RoomTypes.DirectClassName));
-    }
 
     // `Membership.where(room_id: room_ids).pluck(:user_id).uniq` (users/sidebars_controller.rb)
     public static List<long> UserIdsInRooms(SqliteSession session, IReadOnlyList<long> roomIds)

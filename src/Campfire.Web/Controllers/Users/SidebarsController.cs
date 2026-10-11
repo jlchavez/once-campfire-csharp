@@ -34,8 +34,8 @@ public sealed class UsersSidebarsController : ApplicationController
 
     SidebarPage LoadSidebarPage(SqliteSession session, User user)
     {
-        var directPairs = Memberships.ForUserWithDirectRooms(session, user.Id, visibleOnly: true);
-        var otherPairs = Memberships.ForUserWithOrderedSharedRooms(session, user.Id, visibleOnly: true);
+        var directPairs = Memberships.VisibleForUserWithDirectRooms(session, user.Id);
+        var otherPairs = Memberships.VisibleForUserWithOrderedRoomWithoutDirectRooms(session, user.Id);
 
         var directRooms = new List<SidebarDirectRoom>();
         foreach (var pair in directPairs)

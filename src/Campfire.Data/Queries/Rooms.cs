@@ -73,29 +73,17 @@ public static class Rooms
     public static Room? FindDirectFor(SqliteSession session, IReadOnlyCollection<long> userIds)
     {
         ArgumentNullException.ThrowIfNull(userIds);
-        var distinctUserIds = userIds.Distinct().ToList();
-        if (distinctUserIds.Count == 0)
+        var ids = userIds.Distinct().ToList();
+        if (ids.Count == 0)
         {
+            // `where(user_id: nil)`: no room.
             return null;
         }
-
-        var (placeholders, listParameters) = Sql.List("user_id", distinctUserIds);
-        var parameters = listParameters.Concat(
-        [
-            ("@type", (object?)RoomTypes.DirectClassName),
-            ("@first_user_id", (object?)distinctUserIds[0]),
-            ("@size", (object?)(long)distinctUserIds.Count),
-        ]).ToArray();
-
-        return Sql.One(session, $"""
-            SELECT {Room.Columns} FROM "rooms"
-            INNER JOIN "memberships" ON "memberships"."room_id" = "rooms"."id"
-            WHERE "rooms"."type" = @type
-              AND "rooms"."id" IN (SELECT "memberships"."room_id" FROM "memberships" WHERE "memberships"."user_id" = @first_user_id)
-            GROUP BY "rooms"."id"
-            HAVING COUNT(*) = @size AND COUNT(CASE WHEN "memberships"."user_id" IN ({placeholders}) THEN 1 END) = @size
-            LIMIT 1
-            """, Room.Read, parameters.ToArray());
+        var (placeholders, parameters) = Sql.List("user_id", ids);
+        return Sql.One(session,
+            $"{select} INNER JOIN \"memberships\" ON \"memberships\".\"room_id\" = \"rooms\".\"id\" WHERE \"rooms\".\"type\" = @type AND \"rooms\".\"id\" IN (SELECT \"memberships\".\"room_id\" FROM \"memberships\" WHERE \"memberships\".\"user_id\" = @first_user_id) GROUP BY \"rooms\".\"id\" HAVING (COUNT(*) = @size AND COUNT(CASE WHEN memberships.user_id IN ({placeholders}) THEN 1 END) = @size) ORDER BY \"rooms\".\"id\" ASC LIMIT 1",
+            Room.Read,
+            [("@type", RoomTypes.DirectClassName), ("@first_user_id", ids[0]), ("@size", ids.Count), .. parameters]);
     }
 
     // `Rooms::<Type>.create!(name:, creator:)`

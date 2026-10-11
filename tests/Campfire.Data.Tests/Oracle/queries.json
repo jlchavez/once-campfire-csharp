@@ -4860,6 +4860,31 @@
     ]
   },
   {
+    "query": "Memberships.VisibleForUserWithDirectRooms",
+    "args": [
+      127326141
+    ],
+    "result": [
+      944797859,
+      1021579682,
+      449028908
+    ]
+  },
+  {
+    "query": "Memberships.VisibleForUserWithOrderedRoomWithoutDirectRooms",
+    "args": [
+      127326141
+    ],
+    "result": [
+      181790929,
+      774341722,
+      1021579681,
+      146174848,
+      211379269,
+      1021579662
+    ]
+  },
+  {
     "query": "Memberships.CountUnreadForUser",
     "args": [
       127326141
@@ -5025,6 +5050,29 @@
     ]
   },
   {
+    "query": "Memberships.VisibleForUserWithDirectRooms",
+    "args": [
+      149087659
+    ],
+    "result": [
+      1021579683,
+      198590975
+    ]
+  },
+  {
+    "query": "Memberships.VisibleForUserWithOrderedRoomWithoutDirectRooms",
+    "args": [
+      149087659
+    ],
+    "result": [
+      515358788,
+      505016279,
+      1021579664,
+      897066373,
+      690221570
+    ]
+  },
+  {
     "query": "Memberships.CountUnreadForUser",
     "args": [
       149087659
@@ -5172,6 +5220,25 @@
     ],
     "result": [
       765383822,
+      963867642,
+      1021579665
+    ]
+  },
+  {
+    "query": "Memberships.VisibleForUserWithDirectRooms",
+    "args": [
+      394959859
+    ],
+    "result": [
+      765383822
+    ]
+  },
+  {
+    "query": "Memberships.VisibleForUserWithOrderedRoomWithoutDirectRooms",
+    "args": [
+      394959859
+    ],
+    "result": [
       963867642,
       1021579665
     ]
@@ -5338,6 +5405,29 @@
     ]
   },
   {
+    "query": "Memberships.VisibleForUserWithDirectRooms",
+    "args": [
+      712064548
+    ],
+    "result": [
+      142918545,
+      1021579685,
+      812357801
+    ]
+  },
+  {
+    "query": "Memberships.VisibleForUserWithOrderedRoomWithoutDirectRooms",
+    "args": [
+      712064548
+    ],
+    "result": [
+      1021579666,
+      658335620,
+      239841951,
+      1021579661
+    ]
+  },
+  {
     "query": "Memberships.CountUnreadForUser",
     "args": [
       712064548
@@ -5495,6 +5585,26 @@
     ]
   },
   {
+    "query": "Memberships.VisibleForUserWithDirectRooms",
+    "args": [
+      773523953
+    ],
+    "result": [
+      1021579684
+    ]
+  },
+  {
+    "query": "Memberships.VisibleForUserWithOrderedRoomWithoutDirectRooms",
+    "args": [
+      773523953
+    ],
+    "result": [
+      1021579667,
+      741303990,
+      1021579652
+    ]
+  },
+  {
     "query": "Memberships.CountUnreadForUser",
     "args": [
       773523953
@@ -5630,6 +5740,20 @@
     "args": [
       773523954,
       true
+    ],
+    "result": []
+  },
+  {
+    "query": "Memberships.VisibleForUserWithDirectRooms",
+    "args": [
+      773523954
+    ],
+    "result": []
+  },
+  {
+    "query": "Memberships.VisibleForUserWithOrderedRoomWithoutDirectRooms",
+    "args": [
+      773523954
     ],
     "result": []
   },
@@ -5772,6 +5896,25 @@
     "args": [
       773523955,
       true
+    ],
+    "result": [
+      1021579655,
+      1021579669,
+      1021579688,
+      1021579656
+    ]
+  },
+  {
+    "query": "Memberships.VisibleForUserWithDirectRooms",
+    "args": [
+      773523955
+    ],
+    "result": []
+  },
+  {
+    "query": "Memberships.VisibleForUserWithOrderedRoomWithoutDirectRooms",
+    "args": [
+      773523955
     ],
     "result": [
       1021579655,
@@ -5928,6 +6071,25 @@
     ]
   },
   {
+    "query": "Memberships.VisibleForUserWithDirectRooms",
+    "args": [
+      773523956
+    ],
+    "result": []
+  },
+  {
+    "query": "Memberships.VisibleForUserWithOrderedRoomWithoutDirectRooms",
+    "args": [
+      773523956
+    ],
+    "result": [
+      1021579657,
+      1021579670,
+      1021579687,
+      1021579658
+    ]
+  },
+  {
     "query": "Memberships.CountUnreadForUser",
     "args": [
       773523956
@@ -6060,6 +6222,20 @@
     "result": []
   },
   {
+    "query": "Memberships.VisibleForUserWithDirectRooms",
+    "args": [
+      773523957
+    ],
+    "result": []
+  },
+  {
+    "query": "Memberships.VisibleForUserWithOrderedRoomWithoutDirectRooms",
+    "args": [
+      773523957
+    ],
+    "result": []
+  },
+  {
     "query": "Memberships.CountUnreadForUser",
     "args": [
       773523957
@@ -6188,6 +6364,20 @@
     "args": [
       773523958,
       true
+    ],
+    "result": []
+  },
+  {
+    "query": "Memberships.VisibleForUserWithDirectRooms",
+    "args": [
+      773523958
+    ],
+    "result": []
+  },
+  {
+    "query": "Memberships.VisibleForUserWithOrderedRoomWithoutDirectRooms",
+    "args": [
+      773523958
     ],
     "result": []
   },

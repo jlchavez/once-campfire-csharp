@@ -45,9 +45,10 @@ public sealed class AccountsUsersController : ApplicationController
     {
         var pageNumber = GearedPage.NumberFrom(Params["page"]);
         RespondTo(MimeType.TurboStream);
+        var viewer = Current.User ?? throw new InvalidOperationException("undefined method 'can_administer?' for nil");
         var (html, page) = await ReadAsync(session =>
         {
-            var users = Users.ActiveOrderedWithoutBots(session);
+            var users = Users.VisibleToOrderedMembers(session, viewer);
             var page = new GearedPage(pageNumber, users.Count, AccountsController.UsersPerPage);
             var rows = page.Portion(users).Select(shown => new AccountUserRow(shown, TransferableUser.GenerateAvatarSignedId(App.Keys, shown.Id))).ToList();
             var view = NewView(session);

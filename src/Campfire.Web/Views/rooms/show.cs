@@ -57,7 +57,6 @@ public partial class View
         var attributes = options.Clone();
         var id = form.FieldId(method);
         attributes["id"] = id;
-        attributes["input"] = RecordIdentifier.DomId(RecordKey.New(Message.ModelName), $"{id}_trix_input");
         attributes["class"] ??= "lexxy-content";
         var data = attributes["data"] as HtmlOptions ?? [];
         data["direct_upload_url"] ??= Routes.RailsDirectUploadsUrl(Origin);

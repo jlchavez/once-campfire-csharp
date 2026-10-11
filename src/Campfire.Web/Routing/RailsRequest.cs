@@ -198,7 +198,7 @@ public sealed partial class RailsRequest : IDisposable
     {
         var accept = Context.Request.Headers.Accept.ToString();
         var present = !string.IsNullOrWhiteSpace(accept);
-        return (IsXhr && (present || ContentMimeType is not null)) || (present && !BrowserLikeAccepts().IsMatch(accept));
+        return IsXhr ? (present || ContentMimeType is not null) : present;
     }
 
     // Mime[...] looks a non-string format up by its to_s, which no extension matches.
@@ -225,9 +225,7 @@ public sealed partial class RailsRequest : IDisposable
     [GeneratedRegex("XMLHttpRequest", RegexOptions.IgnoreCase)]
     private static partial Regex XmlHttpRequest();
 
-    // BROWSER_LIKE_ACCEPTS
-    [GeneratedRegex(@",\s*\*/\*|\*/\*\s*,")]
-    private static partial Regex BrowserLikeAccepts();
+
 
     // format_from_path_extension
     [GeneratedRegex(@"\.(\w+)\z")]

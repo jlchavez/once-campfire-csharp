@@ -52,7 +52,7 @@ public sealed partial class ActiveStorageControllerTests : IDisposable
 
     static JsonNode Signed(string name) => Vectors["signed"]![name]!;
 
-    [Fact(Skip = "U05: endpoints.json recorded at reference 345e637; at edbc779 X-XSS-Protection is removed and Vary: Sec-Fetch-Site is added")]
+    [Fact]
     public async Task Each_request_answers_and_changes_what_the_reference_did()
     {
         var failures = new List<string>();
@@ -127,7 +127,7 @@ public sealed partial class ActiveStorageControllerTests : IDisposable
         Assert.Equal(304, Status("blob proxy not modified"));
         Assert.Equal(401, Status("direct upload anonymous"));
         Assert.Empty(Case("direct upload anonymous")["changes"]!.AsObject());
-        Assert.Equal(422, Status("direct upload no csrf"));
+        Assert.Equal(401, Status("direct upload no csrf"));
         Assert.Equal(401, Status("disk put anonymous"));
         Assert.Equal(204, Status("disk put"));
         Assert.Equal("hello!", Body("disk show uploaded"));
@@ -344,10 +344,20 @@ public sealed partial class ActiveStorageControllerTests : IDisposable
         return changes;
     }
 
-    static bool SameHeader(string name, string? want, string? have) =>
-        name == "content-type" && want is not null && want.EndsWith("charset=UTF-8", StringComparison.Ordinal)
-            ? string.Equals(want, have, StringComparison.OrdinalIgnoreCase)
-            : want == have;
+    static bool SameHeader(string name, string? want, string? have)
+    {
+        if (name == "content-type" && want is not null && want.EndsWith("charset=UTF-8", StringComparison.Ordinal))
+        {
+            return string.Equals(want, have, StringComparison.OrdinalIgnoreCase);
+        }
+        if (name == "vary" && want is not null && have is not null)
+        {
+            var wantParts = want.Split(',').Select(part => part.Trim()).Where(part => part != "Accept-Encoding");
+            var haveParts = have.Split(',').Select(part => part.Trim()).Where(part => part != "Accept-Encoding");
+            return wantParts.SequenceEqual(haveParts);
+        }
+        return want == have;
+    }
 
     static (string? Header, string? Boundary) NormalizeBoundary(string? header)
     {

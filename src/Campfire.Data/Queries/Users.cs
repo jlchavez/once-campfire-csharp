@@ -20,6 +20,9 @@ public static class Users
     // `scope :without_bots, -> { where.not(role: :bot) }`
     const string withoutBots = "\"users\".\"role\" != 2";
 
+    // `scope :member, -> { where(role: :member) }`
+    const string members = "\"users\".\"role\" = 0";
+
     public static User? Find(SqliteSession session, long id) =>
         Sql.One(session, $"{select} WHERE \"users\".\"id\" = @id LIMIT 1", User.Read, ("@id", id));
 
@@ -67,6 +70,38 @@ public static class Users
         }
         var (placeholders, parameters) = Sql.List("status", statuses.Select(status => (int)status).ToList());
         return session.Query($"{select} WHERE \"users\".\"status\" IN ({placeholders}) AND {withoutBots} {ordered}", User.Read, parameters);
+    }
+
+    // `User.visible_to(user).ordered.without_bots` (accounts/users_controller.rb, accounts_controller.rb)
+    public static List<User> VisibleToOrderedWithoutBots(SqliteSession session, User viewer)
+    {
+        ArgumentNullException.ThrowIfNull(viewer);
+        return viewer.CanAdminister()
+            ? WithStatusesOrderedWithoutBots(session, UserStatus.Active, UserStatus.Banned)
+            : ActiveOrderedWithoutBots(session);
+    }
+
+    // `User.visible_to(user).ordered.member` (accounts/users_controller.rb, accounts_controller.rb)
+    public static List<User> VisibleToOrderedMembers(SqliteSession session, User viewer)
+    {
+        ArgumentNullException.ThrowIfNull(viewer);
+        return viewer.CanAdminister()
+            ? WithStatusesOrderedMembers(session, UserStatus.Active, UserStatus.Banned)
+            : ActiveOrderedMembers(session);
+    }
+
+    public static List<User> ActiveOrderedMembers(SqliteSession session) =>
+        session.Query($"{select} WHERE {active} AND {members} {ordered}", User.Read);
+
+    public static List<User> WithStatusesOrderedMembers(SqliteSession session, params IReadOnlyList<UserStatus> statuses)
+    {
+        ArgumentNullException.ThrowIfNull(statuses);
+        if (statuses.Count == 0)
+        {
+            return [];
+        }
+        var (placeholders, parameters) = Sql.List("status", statuses.Select(status => (int)status).ToList());
+        return session.Query($"{select} WHERE \"users\".\"status\" IN ({placeholders}) AND {members} {ordered}", User.Read, parameters);
     }
 
     // `User.active_bots.ordered`

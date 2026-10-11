@@ -75,8 +75,84 @@ public static class BlobAnalyzer
     public static JsonObject ImageMetadata(string path)
     {
         ArgumentNullException.ThrowIfNull(path);
-        LibVips.EnsureInitialized();
-        return VipsImaging.ImageMetadata(path);
+        if (LibVips.IsAvailable)
+        {
+            LibVips.EnsureInitialized();
+            return VipsImaging.ImageMetadata(path);
+        }
+        return FallbackImageMetadata(path);
+    }
+
+    static JsonObject FallbackImageMetadata(string path)
+    {
+        try
+        {
+            using var stream = File.OpenRead(path);
+            var header = new byte[30];
+            var read = stream.Read(header, 0, header.Length);
+            if (read < 16) return [];
+
+            // PNG: 89 50 4E 47 0D 0A 1A 0A
+            if (header[0] == 0x89 && header[1] == 0x50 && header[2] == 0x4E && header[3] == 0x47 &&
+                header[4] == 0x0D && header[5] == 0x0A && header[6] == 0x1A && header[7] == 0x0A && read >= 24)
+            {
+                var width = (header[16] << 24) | (header[17] << 16) | (header[18] << 8) | header[19];
+                var height = (header[20] << 24) | (header[21] << 16) | (header[22] << 8) | header[23];
+                return new JsonObject { ["width"] = width, ["height"] = height };
+            }
+
+            // GIF: GIF87a or GIF89a
+            if (header[0] == 0x47 && header[1] == 0x49 && header[2] == 0x46 && read >= 10)
+            {
+                var width = header[6] | (header[7] << 8);
+                var height = header[8] | (header[9] << 8);
+                return new JsonObject { ["width"] = width, ["height"] = height };
+            }
+
+            // JPEG: FF D8
+            if (header[0] == 0xFF && header[1] == 0xD8)
+            {
+                stream.Position = 2;
+                while (stream.Position < stream.Length)
+                {
+                    var markerPrefix = stream.ReadByte();
+                    if (markerPrefix == -1) break;
+                    if (markerPrefix != 0xFF) continue;
+                    var marker = stream.ReadByte();
+                    while (marker == 0xFF) marker = stream.ReadByte();
+                    if (marker == -1) break;
+
+                    if (marker is 0xD8 or 0xD9 or (>= 0xD0 and <= 0xD7)) continue;
+
+                    var lenHi = stream.ReadByte();
+                    var lenLo = stream.ReadByte();
+                    if (lenHi == -1 || lenLo == -1) break;
+                    var length = (lenHi << 8) | lenLo;
+
+                    if (marker is 0xC0 or 0xC1 or 0xC2)
+                    {
+                        var precision = stream.ReadByte();
+                        var hHi = stream.ReadByte();
+                        var hLo = stream.ReadByte();
+                        var wHi = stream.ReadByte();
+                        var wLo = stream.ReadByte();
+                        if (precision != -1 && hHi != -1 && hLo != -1 && wHi != -1 && wLo != -1)
+                        {
+                            var height = (hHi << 8) | hLo;
+                            var width = (wHi << 8) | wLo;
+                            return new JsonObject { ["width"] = width, ["height"] = height };
+                        }
+                        break;
+                    }
+
+                    stream.Position += length - 2;
+                }
+            }
+        }
+        catch
+        {
+        }
+        return [];
     }
 
     /// <summary>

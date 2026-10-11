@@ -18,7 +18,9 @@ require "action_controller/test_case"
 require "base64"
 
 # RecordNotFound and the forgery error log to stdout in production. The vectors are the JSON only.
-Rails.logger = ActiveSupport::Logger.new($stderr)
+Rails.logger = ActiveSupport::Logger.new(File::NULL)
+ActiveRecord::Base.logger = nil if defined?(ActiveRecord)
+OUTPUT = "tests/Campfire.Web.Tests/Controllers/ActiveStorage/Vectors/endpoints.json"
 
 HOST = "campfire.test"
 NOW = Time.now.utc
@@ -401,11 +403,11 @@ results << record("disk show uploaded", "GET", path_of(stored.url), {})
 # direct_upload path from the service is already a path. Record it without a doubled host.
 SIGNED["direct_upload"] = direct_upload_path.start_with?("http") ? path_of(direct_upload_path) : direct_upload_path
 
-puts JSON.pretty_generate(
+File.write(File.join(WORK, OUTPUT), JSON.pretty_generate(
   "now" => NOW.iso8601,
   "fixtures" => FIXTURES,
   "storage" => STORAGE.map { |key, file| file ? { "key" => key, "file" => file } : { "key" => key, "text" => NOTES } },
   "extra_sql" => EXTRA_SQL,
   "extra_files" => EXTRA_FILES,
   "signed" => SIGNED,
-  "cases" => results.compact)
+  "cases" => results.compact) + "\n")

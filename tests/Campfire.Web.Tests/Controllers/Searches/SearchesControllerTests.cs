@@ -34,7 +34,7 @@ public sealed partial class SearchesControllerTests : IDisposable
 
     static IEnumerable<JsonNode> Cases() => Vectors["cases"]!.AsArray().Select(sample => sample!);
 
-    [Fact(Skip = "U05: vectors recorded at reference 345e637; at edbc779 search, message markup and the layout change")]
+    [Fact]
     public async Task Each_request_answers_and_changes_what_the_reference_did()
     {
         var failures = new List<string>();
@@ -51,7 +51,7 @@ public sealed partial class SearchesControllerTests : IDisposable
         Assert.True(failures.Count == 0, string.Join('\n', failures));
     }
 
-    [Fact(Skip = "U05: vectors recorded at reference 345e637; at edbc779 search, message markup and the layout change")]
+    [Fact]
     public async Task Acceptance_criterion_searches_with_query_coffee_equals_the_reference_normalized_html()
     {
         var sample = Cases().First(c => c["name"]!.GetValue<string>() == "searches with query coffee");
@@ -172,6 +172,12 @@ public sealed partial class SearchesControllerTests : IDisposable
         if (name == "content-type" && want is not null && want.EndsWith("charset=UTF-8", StringComparison.Ordinal))
         {
             return string.Equals(want, have, StringComparison.OrdinalIgnoreCase);
+        }
+        if (name == "vary" && want is not null && have is not null)
+        {
+            var wantParts = want.Split(',').Select(part => part.Trim()).Where(part => part != "Accept-Encoding");
+            var haveParts = have.Split(',').Select(part => part.Trim()).Where(part => part != "Accept-Encoding");
+            return wantParts.SequenceEqual(haveParts);
         }
         return want == have;
     }

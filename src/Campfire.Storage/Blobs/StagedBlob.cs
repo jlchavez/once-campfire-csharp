@@ -15,7 +15,14 @@ public sealed class StagedBlob : IDisposable
         Blob = blob;
     }
 
-    public NewBlob Blob { get; }
+    public NewBlob Blob { get; private set; }
+
+    internal DiskService Service => service;
+
+    internal void UpdateMetadata(System.Text.Json.Nodes.JsonObject metadata)
+    {
+        Blob = Blob with { Metadata = metadata };
+    }
 
     public bool Kept { get; private set; }
 

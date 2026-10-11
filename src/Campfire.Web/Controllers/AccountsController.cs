@@ -49,8 +49,8 @@ public sealed class AccountsController : ApplicationController
                 viewer.IsAdministrator,
                 lastRoomId,
                 [.. users.Where(row => row.User.IsAdministrator)],
-                [.. users.Where(row => !row.User.IsAdministrator)],
-                pageNumber == PageCount(users.Count) ? null : pageNumber + 1);
+                [.. users.Where(row => !row.User.IsAdministrator).Skip((int)((pageNumber - 1) * UsersPerPage)).Take(UsersPerPage)],
+                pageNumber == PageCount(users.Count(row => !row.User.IsAdministrator)) ? null : pageNumber + 1);
             view.AccountsEdit(w, page);
         }).ConfigureAwait(false);
     }
@@ -111,10 +111,9 @@ public sealed class AccountsController : ApplicationController
         }
     }
 
-    // `account_users`: administrators also see banned people.
-    static List<User> AccountUsers(SqliteSession session, User viewer) => viewer.CanAdminister()
-        ? Users.WithStatusesOrderedWithoutBots(session, UserStatus.Active, UserStatus.Banned)
-        : Users.ActiveOrderedWithoutBots(session);
+    // `account_users`: administrators also see banned people (User.visible_to).
+    static List<User> AccountUsers(SqliteSession session, User viewer) =>
+        Users.VisibleToOrderedWithoutBots(session, viewer);
 
     // GearedPagination::Recordset#page_count with one ratio of 500.
     static long PageCount(int records) => Math.Max(1, (records + UsersPerPage - 1) / UsersPerPage);

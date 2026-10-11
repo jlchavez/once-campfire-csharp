@@ -25,11 +25,11 @@ static class BlobStreams
     /// <c>fresh_when</c> digests when the flash is empty and the request isn't a turbo frame.
     /// True when the response is already a 304.
     /// </summary>
-    public static bool FreshForever(Controller controller)
+    public static bool FreshForever(Controller controller, DateTimeOffset? lastModified = null)
     {
         controller.ExpiresIn(TimeSpan.FromSeconds(3_155_695_200), isPublic: true, immutable: true);
         controller.Headers["ETag"] = $"W/\"{Controller.EtagDigest(controller.RequestUrl.FullPath)}\"";
-        controller.Headers["Last-Modified"] = Controller.HttpDate(new DateTimeOffset(2011, 1, 1, 0, 0, 0, TimeSpan.Zero));
+        controller.Headers["Last-Modified"] = Controller.HttpDate(lastModified ?? new DateTimeOffset(2011, 1, 1, 0, 0, 0, TimeSpan.Zero));
         if (!controller.IsFresh())
         {
             return false;
@@ -69,7 +69,7 @@ static class BlobStreams
     {
         var size = blob.ByteSize < 0 ? 0 : blob.ByteSize;
         var ranges = RackByteRanges.Parse(rangeHeader, size);
-        if (ranges is null || ranges.Count == 0)
+        if (ranges is null || ranges.Count == 0 || ranges.Count > 1)
         {
             controller.Head(416);
             return;

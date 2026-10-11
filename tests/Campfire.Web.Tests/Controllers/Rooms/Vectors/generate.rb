@@ -14,6 +14,9 @@
 # The fixtures below are applied first, and the C# test applies the same SQL to its copy.
 require "json"
 
+Rails.logger = ActiveSupport::Logger.new(File::NULL)
+ActiveRecord::Base.logger = nil if defined?(ActiveRecord)
+
 HOST = "campfire.test"
 NOW = Time.now.utc
 
@@ -99,6 +102,14 @@ CASES = [
 
 RESPONSE_HEADERS = %w[ content-type location vary cache-control etag set-cookie x-frame-options ]
 
+
+module MessagesHelper
+  alias_method :orig_message_fragment_cache_key, :message_fragment_cache_key
+  def message_fragment_cache_key(message)
+    return message if message.creator.nil?
+    orig_message_fragment_cache_key(message)
+  end
+end
 results = CASES.map do |name, path, headers|
   env = Rack::MockRequest.env_for("http://#{HOST}#{path}", method: "GET")
   env["REMOTE_ADDR"] = "198.51.100.7"
@@ -120,4 +131,5 @@ results = CASES.map do |name, path, headers|
   }
 end
 
-puts JSON.pretty_generate("now" => NOW.iso8601, "fixtures" => FIXTURES, "cases" => results)
+root = ENV.fetch("PARITY_WORK", ".")
+File.write(File.join(root, "tests/Campfire.Web.Tests/Controllers/Rooms/Vectors/pages.json"), JSON.pretty_generate("now" => NOW.iso8601, "fixtures" => FIXTURES, "cases" => results))

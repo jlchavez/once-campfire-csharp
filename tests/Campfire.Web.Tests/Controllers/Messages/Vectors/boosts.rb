@@ -15,6 +15,9 @@
 require "json"
 require "action_controller/test_case"
 
+Rails.logger = ActiveSupport::Logger.new(File::NULL)
+ActiveRecord::Base.logger = nil if defined?(ActiveRecord)
+
 HOST = "campfire.test"
 NOW = Time.now.utc
 
@@ -207,4 +210,5 @@ results = CASES.map do |name, method, path, headers, body|
   }
 end
 
-puts JSON.pretty_generate("now" => NOW.iso8601, "fixtures" => FIXTURES, "cases" => results)
+root = ENV.fetch("PARITY_WORK", ".")
+File.write(File.join(root, "tests/Campfire.Web.Tests/Controllers/Messages/Vectors/boosts.json"), JSON.pretty_generate("now" => NOW.iso8601, "fixtures" => FIXTURES, "cases" => results))

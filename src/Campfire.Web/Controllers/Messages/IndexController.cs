@@ -1,3 +1,4 @@
+using System.Security.Cryptography;
 using System.Text;
 using Campfire.Data.Pagination;
 using Campfire.Data.Queries;
@@ -52,29 +53,31 @@ public sealed class MessagesIndexController : ApplicationController
             return;
         }
 
-        // EtagWithTemplateDigest runs inside fresh_when, from the template the request's formats
-        // would render. A request that takes no HTML still gets the record etag, then 406.
-        var html = Request.NegotiateMime([MimeType.Html]);
-        var validator = CacheKeys.Expand(messages.Select(message => CacheKeys.Record("messages", message.Id, message.UpdatedAt)));
-        if (FreshWhen(new Freshness { Etag = validator, Template = html is null ? null : IndexTemplateDigest }))
+        if (Params["format"]?.ToString() is { Length: > 0 } format && !string.Equals(format, "html", StringComparison.OrdinalIgnoreCase))
         {
-            return;
+            throw new InvalidOperationException($"Missing template messages/index with format {format}");
         }
+
+        var html = Request.NegotiateMime([MimeType.Html]);
         if (html is null)
         {
             throw new UnknownFormatException();
         }
 
-        // `render partial: "messages/message", collection: @messages, cached: true`, layout false.
-        // A cold fragment cache renders each partial (M02 leaves the cache unimplemented).
-        // ActiveStorage::SetCurrent's URL options are the request's, through View.Origin.
         var page = await ReadAsync(session =>
         {
             var view = NewView(session);
             var loaded = LoadMessages(session, messages);
             return RenderString(w => view.MessagesIndex(w, loaded));
         }).ConfigureAwait(false);
-        Render(page, MimeType.Html.Value);
+
+        var bodyHash = Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(page)));
+        if (FreshWhen(new Freshness { Etag = bodyHash, Template = null }))
+        {
+            return;
+        }
+
+        SetResponseBody(page, MimeType.Html.Value);
     }
 
     async ValueTask SetRoomAsync() => room = (await RoomScoped.FindRoomAsync(this).ConfigureAwait(false)).Room;

@@ -142,7 +142,7 @@ public sealed partial class MessagesWriteController : ApplicationController
         {
             { "maintain_scroll", true },
             { "action", "replace" },
-            { "target", RecordIdentifier.DomId(new RecordKey(Message.ModelName, CurrentMessage.ClientMessageId), "presentation") },
+            { "target", RecordIdentifier.DomId(new RecordKey(Message.ModelName, CurrentMessage.Id), "presentation") },
         });
         App.RequireSeams().Broadcaster.Broadcast(MessagesStream(CurrentRoom), TurboStreamPayload(replace.Value));
 
@@ -170,7 +170,7 @@ public sealed partial class MessagesWriteController : ApplicationController
         }
 
         // `@message.broadcast_remove`
-        var remove = TurboStreamTags.Remove(RecordIdentifier.DomId(new RecordKey(Message.ModelName, destroyed.ClientMessageId)));
+        var remove = TurboStreamTags.Remove(RecordIdentifier.DomId(new RecordKey(Message.ModelName, destroyed.Id)));
         App.RequireSeams().Broadcaster.Broadcast(MessagesStream(CurrentRoom), TurboStreamPayload(remove.Value));
 
         // The implicit render: destroy has only a turbo_stream template.

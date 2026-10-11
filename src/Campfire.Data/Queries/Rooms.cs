@@ -68,29 +68,34 @@ public static class Rooms
     public static List<Room> ForUserWithoutDirectsOrdered(SqliteSession session, long userId) =>
         session.Query($"{selectForUser} AND \"rooms\".\"type\" != @type {ordered}", Room.Read, ("@user_id", userId), ("@type", RoomTypes.DirectClassName));
 
-    // `Rooms::Direct.find_for(users)` (rooms/direct.rb): the first direct room, in the order of
-    // `all.joins(:users)`, whose members are exactly these users.
+    // `Rooms::Direct.find_for(users)` (rooms/direct.rb): among the first user's rooms, the one
+    // whose members are exactly these users: as many memberships as users, and all of them theirs.
     public static Room? FindDirectFor(SqliteSession session, IReadOnlyCollection<long> userIds)
     {
         ArgumentNullException.ThrowIfNull(userIds);
-        var wanted = userIds.ToHashSet();
-        var members = new Dictionary<long, HashSet<long>>();
-        foreach (var (roomId, userId) in session.Query(
-            "SELECT \"memberships\".\"room_id\", \"users\".\"id\" FROM \"users\" INNER JOIN \"memberships\" ON \"users\".\"id\" = \"memberships\".\"user_id\" INNER JOIN \"rooms\" ON \"rooms\".\"id\" = \"memberships\".\"room_id\" WHERE \"rooms\".\"type\" = @type",
-            reader => (reader.GetInt64(0), reader.GetInt64(1)),
-            ("@type", RoomTypes.DirectClassName)))
+        var distinctUserIds = userIds.Distinct().ToList();
+        if (distinctUserIds.Count == 0)
         {
-            if (!members.TryGetValue(roomId, out var set))
-            {
-                members[roomId] = set = [];
-            }
-            set.Add(userId);
+            return null;
         }
-        var candidates = session.Query(
-            $"{select} INNER JOIN \"memberships\" ON \"memberships\".\"room_id\" = \"rooms\".\"id\" INNER JOIN \"users\" ON \"users\".\"id\" = \"memberships\".\"user_id\" WHERE \"rooms\".\"type\" = @type",
-            Room.Read,
-            ("@type", RoomTypes.DirectClassName));
-        return candidates.FirstOrDefault(room => members.TryGetValue(room.Id, out var set) && set.SetEquals(wanted));
+
+        var (placeholders, listParameters) = Sql.List("user_id", distinctUserIds);
+        var parameters = listParameters.Concat(
+        [
+            ("@type", (object?)RoomTypes.DirectClassName),
+            ("@first_user_id", (object?)distinctUserIds[0]),
+            ("@size", (object?)(long)distinctUserIds.Count),
+        ]).ToArray();
+
+        return Sql.One(session, $"""
+            SELECT {Room.Columns} FROM "rooms"
+            INNER JOIN "memberships" ON "memberships"."room_id" = "rooms"."id"
+            WHERE "rooms"."type" = @type
+              AND "rooms"."id" IN (SELECT "memberships"."room_id" FROM "memberships" WHERE "memberships"."user_id" = @first_user_id)
+            GROUP BY "rooms"."id"
+            HAVING COUNT(*) = @size AND COUNT(CASE WHEN "memberships"."user_id" IN ({placeholders}) THEN 1 END) = @size
+            LIMIT 1
+            """, Room.Read, parameters.ToArray());
     }
 
     // `Rooms::<Type>.create!(name:, creator:)`

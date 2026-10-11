@@ -44,7 +44,7 @@ public sealed record MessageView(
     bool IsPosterProcessed = false)
 {
     /// <summary>The record <c>dom_id</c> and form helpers read.</summary>
-    public RecordKey Record => new(Message.ModelName, ClientMessageId);
+    public RecordKey Record => new(Message.ModelName, Id);
 
     /// <summary>
     /// <c>content_type</c>: "attachment", else "sound" for <c>/play name</c> with a known sound,

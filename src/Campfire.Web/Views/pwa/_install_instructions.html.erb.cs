@@ -8,7 +8,7 @@
 
     <% if (platform.IsEdge()) { %>
         <ol>
-          <li>Click <em><%= ImageTag("install-edge.svg", new() { { "alt", "the app available - install Campfire chat button" }, { "size", 16 } }) %></em>in the address bar.</li>
+          <li>Click <em><%= ImageTag("external/install-edge.svg", new() { { "alt", "the app available - install Campfire chat button" }, { "size", 16 } }) %></em>in the address bar.</li>
           <li>Click <em>Install</em>.</li>
         </ol>
       <% } else if (platform.IsChrome() && platform.IsAndroid) { %>

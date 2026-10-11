@@ -48,13 +48,14 @@ public static class MessagePages
         session.Query($"{inRoom} AND (created_at > @time) {ascending}", Message.Read, ("@room_id", roomId), ("@time", Db.Time(time)));
 
     // `without(excluding).page_updated_since(time)`: the newest page of messages updated after
-    // `time`, leaving out `excluding` (the refresh's new messages).
+    // `time`, leaving out `excluding` (the refresh's new messages). Sorting on `+created_at`, which
+    // no index covers, has SQLite find the few messages through (room_id, updated_at).
     public static List<Message> PageUpdatedSince(SqliteSession session, long roomId, DateTimeOffset time, IReadOnlyList<long> excluding)
     {
         ArgumentNullException.ThrowIfNull(excluding);
         var (placeholders, parameters) = Sql.List("id", excluding);
         var without = excluding.Count == 0 ? "" : $" AND \"messages\".\"id\" NOT IN ({placeholders})";
-        return Last(session, $"{inRoom}{without} AND (updated_at > @time) {descending}",
+        return Last(session, $"{inRoom}{without} AND (updated_at > @time) ORDER BY +\"messages\".\"created_at\" DESC LIMIT {pageSizeText}",
             [("@room_id", roomId), .. parameters, ("@time", Db.Time(time))]);
     }
 

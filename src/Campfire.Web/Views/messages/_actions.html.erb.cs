@@ -1,5 +1,6 @@
 <%# Be sure to check/update messages/_template.html.erb when changing this file %>
 
+<%= "" /* cache_message_actions */ %>
 <div class="message__actions" data-controller="soft-keyboard">
   <%= Tag.Details(new() { { "class", "position-relative" },
       { "data", new HtmlOptions { { "controller", "popup" }, { "action", "keydown.esc->popup#close toggle->popup#toggle click@document->popup#closeOnClickOutside" }, { "popup_orientation_top_class", "popup-orientation-top" } } } }, () => { %>
@@ -10,14 +11,16 @@
 
     <div class="message__actions-menu border shadow" data-popup-target="menu">
       <div class="quick-boosts">
+        <% var boostPath = Routes.MessageBoostsPath(message.Id); %>
+        <% var boostFrame = RecordIdentifier.DomId(message.Record, "boosting"); %>
         <% foreach (var (character, title) in Reactions) { %>
-          <%= FormWith(FormModel.New("Boost"), Routes.MessageBoostsPath(message.Id), new() { { "data", new HtmlOptions { { "turbo_frame", RecordIdentifier.DomId(message.Record, "boosting") }, { "action", "popup#close" } } } }, form => { %>
+          <form data-turbo-frame="<%= boostFrame %>" data-action="popup#close" action="<%= boostPath %>" accept-charset="UTF-8" method="post">
             <%= HiddenFieldTag("boost[content]", character) %>
-            <%= form.Button(new() { { "type", "submit" }, { "title", title }, { "class", "btn message__action-btn" }, { "data", new HtmlOptions { { "emoji", character } } } }, () => { %>
+            <button name="button" type="submit" title="<%= title %>" class="btn message__action-btn" data-emoji="<%= character %>">
               <figure class="margin-none boost-character"><%= character %></figure>
               <span class="for-screen-reader"><%= title %></span>
-            <% }) %>
-          <% }) %>
+            </button>
+          </form>
         <% } %>
 
         <%= LinkTo(Routes.NewMessageBoostPath(message.Id),

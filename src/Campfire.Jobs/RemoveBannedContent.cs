@@ -57,11 +57,11 @@ public sealed class RemoveBannedContent(SqliteDatabase database, IBroadcaster br
         $"{Gid.Create(room.Type.ClassName(), room.Id).ToParam()}:messages";
 
     // `broadcast_remove_to room, :messages` with the message as the target: a template-less
-    // remove action for `dom_id(message)`, which is keyed by client_message_id (`to_key`),
+    // remove action for `dom_id(message)`, which is keyed by message id (`to_key`),
     // JSON-encoded as ActionCable.server.broadcast's default coder does.
     internal static string RemovePayload(Message message)
     {
-        var target = RubyEscape.HtmlEscape($"message_{message.ClientMessageId}");
+        var target = RubyEscape.HtmlEscape($"message_{message.Id}");
         return RailsJson.Encode(JsonValue.Create($"<turbo-stream action=\"remove\" target=\"{target}\"></turbo-stream>"));
     }
 }

@@ -119,6 +119,13 @@ public sealed partial class MessageMarkupTests : IDisposable
         var headers = app.SignedIn(DavidSession);
         headers["Host"] = host;
         headers["Origin"] = origin;
+        // The reference test runs without forgery protection. With it on, an HTTPS post needs the
+        // fetch metadata browsers send to secure origins (verified_via_header_only? in
+        // actionpack's request_forgery_protection.rb); over plain HTTP they send none.
+        if (scheme == "https")
+        {
+            headers["Sec-Fetch-Site"] = "same-origin";
+        }
         var form = "message%5Bbody%5D=Request+origin&message%5Bclient_message_id%5D=request-origin";
 
         var posted = await app.SendAsync("POST", $"/rooms/{Designers}/messages.turbo_stream", headers, form, scheme: scheme);

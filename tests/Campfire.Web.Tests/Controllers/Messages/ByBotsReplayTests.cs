@@ -28,28 +28,9 @@ public sealed partial class ByBotsReplayTests : IDisposable
 
     // Cases whose rendered message differs from the reference for a reason outside this task: the
     // body, its ETag and the broadcast payloads aren't compared; everything else is.
-    const string markup = "U05: the message markup at edbc779 (the message's actions, data-client-message-id)";
 
     static readonly Dictionary<string, string> KnownDifferences = new()
     {
-        ["create"] = markup,
-        ["create with UTF-8"] = markup,
-        ["create as text/plain"] = markup,
-        ["create as JSON"] = markup,
-        ["create with HTML"] = markup,
-        ["create with what parses as a form"] = markup,
-        ["create in a direct room"] = markup,
-        ["create mentioning a bot with a webhook"] = markup,
-        ["create mentioning itself"] = markup,
-        ["update"] = markup,
-        ["update with UTF-8"] = markup,
-        ["update to the same body"] = markup,
-        ["boost"] = markup,
-        ["boost with text"] = markup,
-        ["index as HTML"] = markup,
-        ["text"] = markup,
-        ["HTML"] = markup,
-        ["in a direct room"] = markup,
     };
 
     static readonly JsonSerializerOptions Unescaped = new() { Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping };
@@ -204,7 +185,7 @@ public sealed partial class ByBotsReplayTests : IDisposable
         {
             text = text.Replace(uuid, name, StringComparison.Ordinal);
         }
-        return MessageDomId().Replace(ClientMessageIdAttribute().Replace(text, ""), "$1<message>");
+        return text;
     }
 
     static void NameNewMessages(JsonObject changes, Dictionary<string, string> messageIds)
@@ -351,11 +332,7 @@ public sealed partial class ByBotsReplayTests : IDisposable
     [GeneratedRegex("^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$")]
     private static partial Regex Uuid();
 
-    [GeneratedRegex("((?:presentation_|edit_|boosts_|boosting_)?message_)(?:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}|<client_message_id of [0-9]+>|[0-9]+)")]
-    private static partial Regex MessageDomId();
 
-    [GeneratedRegex(@" data-client-message-id=\\?""[^""\\]*\\?""")]
-    private static partial Regex ClientMessageIdAttribute();
 
     [GeneratedRegex("/([0-9]+)$")]
     private static partial Regex GidId();

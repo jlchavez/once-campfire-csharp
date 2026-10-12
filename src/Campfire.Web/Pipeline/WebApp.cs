@@ -3,8 +3,10 @@ using System.Globalization;
 using System.Text.RegularExpressions;
 using Campfire.Data.Sqlite;
 using Campfire.RailsCompat.Crypto;
+using Campfire.Web.ResponseCache;
 using Campfire.Web.Routing;
 using Microsoft.AspNetCore.Http;
+using ResponseCacheStore = Campfire.Web.ResponseCache.ResponseCache;
 
 namespace Campfire.Web.Pipeline;
 
@@ -56,6 +58,33 @@ public sealed partial class WebApp
 
     /// <summary>Timeout deadline for link unfurling, overriding <c>UnfurlLinksController.Deadline</c>.</summary>
     public TimeSpan? UnfurlDeadline { get; set; }
+
+    /// <summary>
+    /// Runs at the start of <c>set_version_headers</c>. The cache tests foreign-write there, after
+    /// the response-cache version was captured and before authentication.
+    /// </summary>
+    public Action<ApplicationController>? OnSetVersionHeaders { get; set; }
+
+    ResponseCacheStore? responses;
+    FragmentStore? fragments;
+
+    /// <summary>The page cache for this database (reference/app/models/response_cache.rb). One per app, not per process.</summary>
+    public ResponseCacheStore Responses => Share(ref responses, () => new ResponseCacheStore(() => Database.Path));
+
+    /// <summary>The fragment and record-snapshot store (reference/app/models/fragment_cache.rb).</summary>
+    public FragmentStore Fragments => Share(ref fragments, () => new FragmentStore(FragmentStore.DefaultBytes));
+
+    /// <summary>One store even when two first requests arrive together. The loser is unused, so it never opens an observer.</summary>
+    static T Share<T>(ref T? location, Func<T> create) where T : class
+    {
+        var existing = Volatile.Read(ref location);
+        if (existing is not null)
+        {
+            return existing;
+        }
+        var created = create();
+        return Interlocked.CompareExchange(ref location, created, null) ?? created;
+    }
 
     /// <summary>Max pixels limit for attachment thumbnails, overriding <c>NamedVariants.ThumbnailMaxPixels</c>.</summary>
     public long? ThumbnailMaxPixels { get; set; }

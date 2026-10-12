@@ -17,9 +17,6 @@ public static class Users
     // `scope :active_bots, -> { active.where(role: :bot) }`
     const string activeBots = $"{active} AND \"users\".\"role\" = 2";
 
-    // `scope :without_bots, -> { where.not(role: :bot) }`
-    const string withoutBots = "\"users\".\"role\" != 2";
-
     public static User? Find(SqliteSession session, long id) =>
         Sql.One(session, $"{select} WHERE \"users\".\"id\" = @id LIMIT 1", User.Read, ("@id", id));
 
@@ -53,20 +50,14 @@ public static class Users
     public static List<long> ActiveIds(SqliteSession session) =>
         Sql.Ids(session, $"SELECT \"users\".\"id\" FROM \"users\" WHERE {active}");
 
-    // `User.active.ordered.without_bots` (accounts/users_controller.rb)
-    public static List<User> ActiveOrderedWithoutBots(SqliteSession session) =>
-        session.Query($"{select} WHERE {active} AND {withoutBots} {ordered}", User.Read);
-
-    // `User.where(status: statuses).ordered.without_bots` (accounts_controller.rb)
-    public static List<User> WithStatusesOrderedWithoutBots(SqliteSession session, params IReadOnlyList<UserStatus> statuses)
+    // `User.visible_to(viewer).ordered.member` and `.administrator` (accounts_controller.rb,
+    // accounts/users_controller.rb): `visible_to` (user/bannable.rb) shows administrators banned
+    // people too, so they can lift the ban.
+    public static List<User> VisibleToOrderedWithRole(SqliteSession session, User viewer, UserRole role)
     {
-        ArgumentNullException.ThrowIfNull(statuses);
-        if (statuses.Count == 0)
-        {
-            return [];
-        }
-        var (placeholders, parameters) = Sql.List("status", statuses.Select(status => (int)status).ToList());
-        return session.Query($"{select} WHERE \"users\".\"status\" IN ({placeholders}) AND {withoutBots} {ordered}", User.Read, parameters);
+        ArgumentNullException.ThrowIfNull(viewer);
+        var visible = viewer.CanAdminister() ? "\"users\".\"status\" IN (0, 2)" : active;
+        return session.Query($"{select} WHERE {visible} AND \"users\".\"role\" = @role {ordered}", User.Read, ("@role", (int)role));
     }
 
     // `User.active_bots.ordered`

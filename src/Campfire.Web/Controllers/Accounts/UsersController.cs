@@ -38,16 +38,17 @@ public sealed class AccountsUsersController : ApplicationController
 
     public static readonly RequestDelegate Destroy = Action(Chain, c => c.DestroyAsync());
 
-    // `set_page_and_extract_portion_from User.active.ordered.without_bots, per_page: 500`, then
+    // `set_page_and_extract_portion_from User.visible_to(Current.user).ordered.member, per_page: 500`, then
     // the implicit render of index.turbo_stream (its only template, so any other format is a 406)
     // and GearedPagination::Controller's after_action `set_paginated_headers`.
     async ValueTask IndexAsync()
     {
         var pageNumber = GearedPage.NumberFrom(Params["page"]);
         RespondTo(MimeType.TurboStream);
+        var viewer = Current.User ?? throw new InvalidOperationException("undefined method 'can_administer?' for nil");
         var (html, page) = await ReadAsync(session =>
         {
-            var users = Users.ActiveOrderedWithoutBots(session);
+            var users = Users.VisibleToOrderedWithRole(session, viewer, UserRole.Member);
             var page = new GearedPage(pageNumber, users.Count, AccountsController.UsersPerPage);
             var rows = page.Portion(users).Select(shown => new AccountUserRow(shown, TransferableUser.GenerateAvatarSignedId(App.Keys, shown.Id))).ToList();
             var view = NewView(session);

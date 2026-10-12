@@ -1,1 +1,2 @@
-<%= AutoSubmitFormWith(new() { { "method", "put" } }) %>
+<%= AutoSubmitFormWith(new() { { "method", "put" } }, _ => { %>
+<% }) %>

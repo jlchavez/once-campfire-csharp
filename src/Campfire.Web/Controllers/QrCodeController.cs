@@ -24,12 +24,35 @@ public sealed class QrCodeController : ApplicationController
     protected override ValueTask RenderIncompatibleBrowserAsync() => PwaIncompatibleBrowser.RenderAsync(this);
 
     // Base64.urlsafe_decode64 raises ArgumentError on bad input; rqrcode raises when the data
-    // doesn't fit a version 40 code. Both are 500s. `render plain:, content_type: "image/svg+xml"`.
+    // doesn't fit a version 40 code. Both answer with 400 Bad Request.
+    // `render plain:, content_type: "image/svg+xml"`.
     void RenderCode()
     {
         var id = Params["id"] as string ?? "";
-        var data = RubyBase64.UrlSafeDecode(id) ?? throw new InvalidOperationException("invalid base64");
-        var svg = QrCodeSvg.Render(data) ?? throw new InvalidOperationException("data doesn't fit a QR code");
+        byte[]? data;
+        try
+        {
+            data = RubyBase64.UrlSafeDecode(id);
+        }
+        catch
+        {
+            Head(StatusCodes.Status400BadRequest);
+            return;
+        }
+
+        if (data is null)
+        {
+            Head(StatusCodes.Status400BadRequest);
+            return;
+        }
+
+        var svg = QrCodeSvg.Render(data);
+        if (svg is null)
+        {
+            Head(StatusCodes.Status400BadRequest);
+            return;
+        }
+
         ExpiresIn(TimeSpan.FromSeconds(oneYear), isPublic: true);
         Render(svg, "image/svg+xml");
     }

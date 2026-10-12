@@ -47,7 +47,7 @@ public sealed class ActiveStorageBlobsProxyController : ActiveStorageController
             BlobStreams.SendBlobByteRange(this, blob, range, DispositionParam);
             return ValueTask.CompletedTask;
         }
-        if (BlobStreams.FreshForever(this))
+        if (BlobStreams.FreshForever(this, blob.CreatedAt))
         {
             return ValueTask.CompletedTask;
         }

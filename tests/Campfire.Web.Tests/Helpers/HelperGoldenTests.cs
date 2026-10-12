@@ -24,7 +24,7 @@ public sealed class HelperGoldenTests
     static readonly RecordKey Room = new("Rooms::Open", 7);
     static readonly RecordKey Direct = new("Rooms::Direct", 9);
     static readonly RecordKey User = new("User", 3);
-    static readonly RecordKey Message = new("Message", "a1b2-c3");
+    static readonly RecordKey Message = new("Message", 11);
     static readonly RecordKey NewMessage = RecordKey.New("Message");
 
     static readonly AvatarUser AvatarUser = new(3, "Kevin & Co – Hi <there>", "eyJfcmFpbHMiOnsiZGF0YSI6M319--abc", Time);

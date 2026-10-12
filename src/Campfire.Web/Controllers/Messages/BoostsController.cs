@@ -103,7 +103,7 @@ public sealed class MessagesBoostsController : ApplicationController
     }
 
     // `@boost.broadcast_append_to @boost.message.room, :messages,
-    //   target: "boosts_message_#{@boost.message.client_message_id}", partial: "messages/boosts/boost",
+    //   target: helpers.dom_id(@boost.message, :boosts), partial: "messages/boosts/boost",
     //   attributes: { maintain_scroll: true }`
     void BroadcastCreate((Room Room, string Html) rendered)
     {
@@ -111,7 +111,7 @@ public sealed class MessagesBoostsController : ApplicationController
         {
             { "maintain_scroll", true },
             { "action", "append" },
-            { "target", $"boosts_message_{CurrentMessage.ClientMessageId}" },
+            { "target", $"boosts_message_{CurrentMessage.Id}" },
         });
         App.RequireSeams().Broadcaster.Broadcast(MessagesStream(rendered.Room), TurboStreamPayload(append.Value));
     }

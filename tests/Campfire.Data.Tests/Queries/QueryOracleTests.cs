@@ -51,8 +51,7 @@ public class QueryOracleTests
     {
         ["Users.ActiveOrdered"] = (s, a, _) => Ids(Users.ActiveOrdered(s)),
         ["Users.ActiveIds"] = (s, a, _) => Ids(Users.ActiveIds(s)),
-        ["Users.ActiveOrderedWithoutBots"] = (s, a, _) => Ids(Users.ActiveOrderedWithoutBots(s)),
-        ["Users.WithStatusesOrderedWithoutBots"] = (s, a, _) => Ids(Users.WithStatusesOrderedWithoutBots(s, [.. LongList(a[0]).Select(status => (UserStatus)status)])),
+        ["Users.VisibleToOrderedWithRole"] = (s, a, _) => Ids(Users.VisibleToOrderedWithRole(s, Users.Find(s, Long(a[0]))!, (UserRole)Long(a[1]))),
         ["Users.ActiveBotsOrdered"] = (s, a, _) => Ids(Users.ActiveBotsOrdered(s)),
         ["Users.Find"] = (s, a, _) => Id(Users.Find(s, Long(a[0]))),
         ["Users.FindActive"] = (s, a, _) => Id(Users.FindActive(s, Long(a[0]))),
@@ -88,6 +87,10 @@ public class QueryOracleTests
         ["Memberships.ForRoom"] = (s, a, _) => Ids(Memberships.ForRoom(s, Long(a[0]))),
         ["Memberships.ForUserWithOrderedRoom"] = (s, a, _) =>
             Ids(Memberships.ForUserWithOrderedRoom(s, Long(a[0]), a[1]!.GetValue<bool>()).Select(pair => pair.Membership.Id)),
+        ["Memberships.VisibleForUserWithDirectRooms"] = (s, a, _) =>
+            Ids(Memberships.VisibleForUserWithDirectRooms(s, Long(a[0])).Select(pair => pair.Membership.Id)),
+        ["Memberships.VisibleForUserWithOrderedRoomWithoutDirectRooms"] = (s, a, _) =>
+            Ids(Memberships.VisibleForUserWithOrderedRoomWithoutDirectRooms(s, Long(a[0])).Select(pair => pair.Membership.Id)),
         ["Memberships.CountUnreadForUser"] = (s, a, _) => Memberships.CountUnreadForUser(s, Long(a[0])),
         ["Memberships.CountForUserWithoutDirectRooms"] = (s, a, _) => Memberships.CountForUserWithoutDirectRooms(s, Long(a[0])),
         ["Memberships.UserIdsInRooms"] = (s, a, _) => Ids(Memberships.UserIdsInRooms(s, LongList(a[0]))),

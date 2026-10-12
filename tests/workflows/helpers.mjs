@@ -22,9 +22,9 @@ export const FIXTURES = {
     hq: LABELS["rooms.hq"] || 201306877,
   },
   messages: {
-    first: "0001",
-    second: "0002",
-    third: "0003",
+    first: 309456473,
+    second: 908005739,
+    third: 607264868,
   },
   boosts: {
     first: LABELS["boosts.first"] || 309456473,

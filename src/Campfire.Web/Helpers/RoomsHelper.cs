@@ -171,7 +171,7 @@ public partial class View
         var timestamp = TimeFormats.ToFsEpoch(message.CreatedAt);
         return Tag.Div(new()
         {
-            { "id", RecordIdentifier.DomId(RecordKey.New("Message") with { Key = message.ClientMessageId }) },
+            { "id", RecordIdentifier.DomId(RecordKey.New("Message") with { Key = message.Id }) },
             { "class", $"message {(message.AllEmoji ? "message--emoji" : "")}" },
             {
                 "data", new HtmlOptions
@@ -179,6 +179,7 @@ public partial class View
                     { "controller", "reply" },
                     { "user_id", message.CreatorId },
                     { "message_id", message.Id },
+                    { "client_message_id", message.ClientMessageId },
                     { "message_timestamp", timestamp },
                     { "message_updated_at", TimeFormats.ToFsEpoch(message.UpdatedAt) },
                     { "sort_value", timestamp },

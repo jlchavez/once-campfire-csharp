@@ -1,33 +1,80 @@
+using Campfire.Data.Queries;
 using Campfire.Data.Records;
 using Campfire.Data.Sqlite;
 
 namespace Campfire.Data.Searching;
 
-// Message.search (reference/app/models/message/searchable.rb) over `user.reachable_messages`, as
+// Message.search_reachable (reference/app/models/message/searchable.rb), as
 // SearchesController#set_messages runs it: the FTS5 `message_search_index` (kept by
-// Lifecycle/MessageSearchIndex from each message's plain text) matched against the sanitized
-// query, in the rooms the user is a member of. The SQL is what Active Record sends; `last_page_of`
-// reverses `ordered` to DESC and flips the rows back, so SQLite breaks `created_at` ties the same
-// way. A query FTS5 can't parse (say a bare "AND") throws its SqliteException
-// ("fts5: syntax error near ..."), as Rails raises ActiveRecord::StatementInvalid.
+// Lifecycle/MessageSearchIndex from each message's plain text) matched against the query's words,
+// each quoted (`match_terms`), in the rooms the user is a member of. A probe reads the newest 1000
+// matches off the index and keeps the user's; when it runs out before a page, the scoped search
+// (`last_page_of_matches`) finds the older ones. The SQL is what Active Record sends; `last`
+// reverses each order to DESC and flips the rows back.
 public static class MessageSearch
 {
-    // `last_page_of(100)`
+    // `size: 100`
     public const int Limit = 100;
     const string limitText = "100";
+    const int probeSize = 1000;
 
-    const string reachable = $"""
-        SELECT {Message.Columns} FROM "messages" INNER JOIN "rooms" ON "messages"."room_id" = "rooms"."id" INNER JOIN "memberships" ON "rooms"."id" = "memberships"."room_id" join message_search_index idx on messages.id = idx.rowid WHERE "memberships"."user_id" = @user_id AND (idx.body match @query) ORDER BY "messages"."created_at" DESC LIMIT {limitText}
+    const string probe = """
+        SELECT m.id, mm.user_id IS NOT NULL FROM message_search_index idx
+        JOIN messages m ON m.id = idx.rowid
+        LEFT JOIN memberships mm ON mm.room_id = m.room_id AND mm.user_id = @user_id
+        WHERE idx.body MATCH @query ORDER BY idx.rowid DESC LIMIT 1000
         """;
 
-    // `Current.user.reachable_messages.search(query).last_page_of(100)`: up to the newest hundred
-    // matches, oldest first. `query` is SearchQuery.Searchable's.
+    const string reachable = $"""SELECT {Message.Columns} FROM "messages" INNER JOIN "rooms" ON "messages"."room_id" = "rooms"."id" INNER JOIN "memberships" ON "rooms"."id" = "memberships"."room_id" join message_search_index idx on messages.id = idx.rowid WHERE "memberships"."user_id" = @user_id AND (idx.body match @query)""";
+
+    // `match_terms(query)`: each word quoted, so FTS5 searches for AND, OR, NOT and NEAR rather
+    // than parsing them as operators.
+    public static string MatchTerms(string query)
+    {
+        ArgumentNullException.ThrowIfNull(query);
+        return string.Join(' ', query.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries).Select(word => $"\"{word.Replace("\"", "\"\"", StringComparison.Ordinal)}\""));
+    }
+
+    // `Message.search_reachable(Current.user, query)`: up to the newest hundred matches, oldest
+    // first. `query` is SearchQuery.Searchable's.
     public static List<Message> Reachable(SqliteSession session, long userId, string query)
     {
         ArgumentNullException.ThrowIfNull(session);
         ArgumentNullException.ThrowIfNull(query);
-        var messages = session.Query(reachable, Message.Read, ("@user_id", userId), ("@query", query));
+        var terms = MatchTerms(query);
+        var probed = session.Query(probe, reader => (Id: reader.GetInt64(0), Reachable: reader.GetInt64(1) == 1), ("@user_id", userId), ("@query", terms));
+        var ids = probed.Where(row => row.Reachable).Select(row => row.Id).Take(Limit).ToList();
+
+        // A scoped fallback preserves older reachable hits behind a large private history.
+        if (ids.Count < Limit && probed.Count == probeSize)
+        {
+            return LastPageOfMatches(session, userId, query);
+        }
+        var messages = WithIds(session, userId, terms, ids);
         messages.Reverse();
         return messages;
+    }
+
+    // `user.reachable_messages.search(query).last_page_of_matches(size)`: `reorder("idx.rowid")`,
+    // so SQLite walks the index newest first and stops at the page, oldest first.
+    public static List<Message> LastPageOfMatches(SqliteSession session, long userId, string query, int size = Limit)
+    {
+        ArgumentNullException.ThrowIfNull(session);
+        ArgumentNullException.ThrowIfNull(query);
+        var messages = session.Query($"{reachable} ORDER BY idx.rowid DESC LIMIT @size", Message.Read, ("@user_id", userId), ("@query", MatchTerms(query)), ("@size", size));
+        messages.Reverse();
+        return messages;
+    }
+
+    // `Page.load(relation.where(id: ids).reorder(:id), :last, 100)`
+    static List<Message> WithIds(SqliteSession session, long userId, string terms, List<long> ids)
+    {
+        if (ids.Count == 0)
+        {
+            return [];
+        }
+        var (placeholders, parameters) = Sql.List("id", ids);
+        return session.Query($"{reachable} AND \"messages\".\"id\" IN ({placeholders}) ORDER BY \"messages\".\"id\" DESC LIMIT {limitText}", Message.Read,
+            [("@user_id", userId), ("@query", terms), .. parameters]);
     }
 }

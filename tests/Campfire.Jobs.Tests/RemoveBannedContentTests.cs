@@ -53,7 +53,7 @@ public sealed class RemoveBannedContentTests : IDisposable
         Assert.Equal((1, 2), (hq.Id, direct.Id));
         Write(tx => Sessions.Start(tx.Session, kevin.Id, "Test", "203.0.113.1", Now));
         var first = Post(hq, kevin, "test-123", "Test message");
-        Post(direct, kevin, "x\"<y>", "Another");
+        var second = Post(direct, kevin, "x\"<y>", "Another");
         var kept = Post(hq, david, "david-1", "Stays");
         Write(tx => Boosts.Create(tx.Session, first.Id, david.Id, "👍", Now));
         recorded.Clear();
@@ -72,10 +72,10 @@ public sealed class RemoveBannedContentTests : IDisposable
             [
                 new Broadcast(
                     "Z2lkOi8vY2FtcGZpcmUvUm9vbXM6Ok9wZW4vMQ:messages",
-                    "\"\\u003cturbo-stream action=\\\"remove\\\" target=\\\"message_test-123\\\"\\u003e\\u003c/turbo-stream\\u003e\""),
+                    $"\"\\u003cturbo-stream action=\\\"remove\\\" target=\\\"message_{first.Id}\\\"\\u003e\\u003c/turbo-stream\\u003e\""),
                 new Broadcast(
                     "Z2lkOi8vY2FtcGZpcmUvUm9vbXM6OkRpcmVjdC8y:messages",
-                    "\"\\u003cturbo-stream action=\\\"remove\\\" target=\\\"message_x\\u0026quot;\\u0026lt;y\\u0026gt;\\\"\\u003e\\u003c/turbo-stream\\u003e\""),
+                    $"\"\\u003cturbo-stream action=\\\"remove\\\" target=\\\"message_{second.Id}\\\"\\u003e\\u003c/turbo-stream\\u003e\""),
             ],
             recorded.Broadcasts);
         Assert.Equal(UserStatus.Banned, Read(session => Users.Find(session, kevin.Id))!.Status);

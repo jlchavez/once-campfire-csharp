@@ -69,7 +69,7 @@ public sealed class MessagesBoostsByBotsController : ApplicationController
         {
             { "maintain_scroll", true },
             { "action", "append" },
-            { "target", $"boosts_message_{current.ClientMessageId}" },
+            { "target", $"boosts_message_{current.Id}" },
         });
         App.RequireSeams().Broadcaster.Broadcast(MessagesStream(CurrentRoom), TurboStreamPayload(append.Value));
 

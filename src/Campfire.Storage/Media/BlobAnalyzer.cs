@@ -70,12 +70,16 @@ public static class BlobAnalyzer
     /// <summary>
     /// <c>ImageAnalyzer::Vips#metadata</c>: <c>new_from_file(path, access: :sequential)</c>, its width
     /// and height swapped for EXIF orientations that turn it on its side. A file libvips can't read
-    /// (or a Vips error) gives <c>{}</c>.
+    /// (or a Vips error), or no libvips at all, gives <c>{}</c>.
     /// </summary>
     public static JsonObject ImageMetadata(string path)
     {
         ArgumentNullException.ThrowIfNull(path);
-        LibVips.EnsureInitialized();
+        if (!LibVips.IsAvailable)
+        {
+            // `unless VIPS_AVAILABLE`: "Skipping image analysis because the ruby-vips gem isn't installed".
+            return [];
+        }
         return VipsImaging.ImageMetadata(path);
     }
 

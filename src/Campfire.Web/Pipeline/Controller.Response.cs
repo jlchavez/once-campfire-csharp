@@ -157,6 +157,16 @@ public abstract partial class Controller
     public void Render(string content, string contentType, int status = 200) =>
         Render(Encoding.UTF8.GetBytes(content), contentType, status);
 
+    /// <summary><c>self.response_body = body</c> directly, without setting <c>Vary: Accept</c>.</summary>
+    public void SetResponseBody(string content, string contentType, int status = 200)
+    {
+        ArgumentNullException.ThrowIfNull(contentType);
+        EnsureNotPerformed();
+        Status = status;
+        SetContentType(contentType, charset: true);
+        body = Encoding.UTF8.GetBytes(content);
+    }
+
     /// <summary>
     /// A body sent as a stream (<c>send_file</c>, Active Storage's proxy), which neither
     /// <c>Rack::ETag</c> digests nor <c>Rack::ConditionalGet</c> empties. Headers are the caller's.
@@ -218,14 +228,10 @@ public abstract partial class Controller
         StartResponse();
     }
 
-    // ActionDispatch::Response.create: config.action_dispatch.default_headers (load_defaults 7.1).
-    // ActionController::Live builds its response with Live::Response.new, which has none.
+    // ActionDispatch::Response.create: config.action_dispatch.default_headers (load_defaults 8.2).
+    // ActionController::Live's Live::Response.create gets them too.
     void StartResponse()
     {
-        if (IsLive)
-        {
-            return;
-        }
         Headers["X-Frame-Options"] = "SAMEORIGIN";
         Headers["X-Content-Type-Options"] = "nosniff";
         Headers["X-Permitted-Cross-Domain-Policies"] = "none";
@@ -277,11 +283,8 @@ public abstract partial class Controller
         }
         var accept = Header("Accept");
         var present = !string.IsNullOrWhiteSpace(accept);
-        if (Request.IsXhr && (present || HasContentMimeType()))
-        {
-            return true;
-        }
-        return present && !BrowserLikeAccepts().IsMatch(accept!);
+        // valid_accept_header with `strict_accept_header` on (load_defaults 8.2).
+        return Request.IsXhr ? (present || HasContentMimeType()) : present;
     }
 
     bool FormatParameterReadable()
@@ -382,7 +385,4 @@ public abstract partial class Controller
 
     [GeneratedRegex(@"[^A-Za-z0-9\-._~:/?#\[\]@!$&'()*+,;=%]")]
     private static partial Regex InvalidUriCharacter();
-
-    [GeneratedRegex(@",\s*\*/\*|\*/\*\s*,")]
-    private static partial Regex BrowserLikeAccepts();
 }

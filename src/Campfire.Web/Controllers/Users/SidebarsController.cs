@@ -34,26 +34,11 @@ public sealed class UsersSidebarsController : ApplicationController
 
     SidebarPage LoadSidebarPage(SqliteSession session, User user)
     {
-        var memberships = Memberships.ForUserWithOrderedRoom(session, user.Id, visibleOnly: true);
-
-        var directPairs = new List<(Membership Membership, Room Room)>();
-        var otherPairs = new List<(Membership Membership, Room Room)>();
-        foreach (var pair in memberships)
-        {
-            if (pair.Room.Type == RoomType.Direct)
-            {
-                directPairs.Add(pair);
-            }
-            else
-            {
-                otherPairs.Add(pair);
-            }
-        }
-
-        var sortedDirect = directPairs.OrderBy(p => p.Room.UpdatedAt).Reverse().ToList();
+        var directPairs = Memberships.VisibleForUserWithDirectRooms(session, user.Id);
+        var otherPairs = Memberships.VisibleForUserWithOrderedRoomWithoutDirectRooms(session, user.Id);
 
         var directRooms = new List<SidebarDirectRoom>();
-        foreach (var pair in sortedDirect)
+        foreach (var pair in directPairs)
         {
             var roomUsers = Users.InRoom(session, pair.Room.Id);
             var others = roomUsers.Where(u => u.Id != user.Id).ToList();

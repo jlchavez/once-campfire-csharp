@@ -10,10 +10,11 @@
 #   - queries: SearchesController#query (`params[:q]&.gsub(/[^[:word:]]/, " ")`) and `present?`
 #     for every q in a seeded random corpus: seed words, FTS5 operators and syntax, punctuation,
 #     mixed scripts, combining marks, emoji, and code points from every plane.
-#   - searches: `set_messages`, `user.reachable_messages.search(query).last_page_of(100)` (ids),
+#   - searches: `set_messages`, `Message.search_reachable(user, query)` (ids),
 #     for every user in the parity seed and every present query; or the SQLite error it raises.
 #   - crowded: 150 more messages, some created at the same second, and searches over them, for the
-#     100 limit and `created_at` ties the seed doesn't have.
+#     100 limit and `created_at` ties the seed doesn't have; then over 1000 newer matches in a room
+#     few users are in, so the accessible probe runs out and the scoped fallback answers.
 #   - recent: Search.record, Search.ordered and `searches.destroy_all`, step by step on a copy of
 #     rails-fixtures.sqlite3, at each step's (whole-second, as travel_to freezes it) time; the
 #     user's searches after each step.
@@ -63,9 +64,14 @@ end
 class Message < ApplicationRecord
   belongs_to :room
   scope :ordered, -> { order(:created_at) }
+  # Preloads only, which change no ids.
+  scope :with_presentation, -> { all }
 
   # Rich text's `to_plain_text`, which the crowded messages below give directly.
   attr_accessor :plain_text_body
+
+  # `record_creation`'s `create_in_index` (the unread memberships aren't searched).
+  after_create :create_in_index
 end
 require File.join(REFERENCE, "app/models/message/pagination")
 require File.join(REFERENCE, "app/models/message/searchable")
@@ -119,7 +125,7 @@ corpus.each do |q|
   next unless query(q).present?
   users.each do |user|
     result = begin
-      { result: user.reachable_messages.search(query(q)).last_page_of(100).map(&:id) }
+      { result: Message.search_reachable(user, query(q)).map(&:id) }
     rescue ActiveRecord::StatementInvalid => error
       { error: error.cause.message }
     end
@@ -145,9 +151,18 @@ Dir.mktmpdir do |dir|
     crowded[:messages] << { id: message.id, room: room.id, creator: creator_id, client_message_id: message.client_message_id, at: created_at.utc.iso8601(6), body: body }
   end
 
-  [ "crowded", "coffee", "crowded coffee", "crowded OR coffee", "Crowded tea", "007", "crowded NOT water", "crowd*", "crowd" ].each do |q|
+  private_room = Room.all.min_by { |room| [ Membership.where(room: room).count, room.id ] }
+  private_creator_id = Membership.where(room: private_room).order(:user_id).first.user_id
+  1010.times do |i|
+    created_at = Time.utc(2026, 4, 2, 12, 0, 0) + i
+    body = "Crowded private #{format("%04d", i)} #{%w[ coffee tea ][i % 2]}"
+    message = Message.create!(room: private_room, creator_id: private_creator_id, client_message_id: "private-#{i}", created_at: created_at, updated_at: created_at, plain_text_body: body)
+    crowded[:messages] << { id: message.id, room: private_room.id, creator: private_creator_id, client_message_id: message.client_message_id, at: created_at.utc.iso8601(6), body: body }
+  end
+
+  [ "crowded", "coffee", "crowded coffee", "crowded OR coffee", "Crowded tea", "007", "crowded NOT water", "crowd*", "crowd", "private", "water" ].each do |q|
     users.each do |user|
-      crowded[:searches] << { user: user.id, q: q, result: user.reachable_messages.search(query(q)).last_page_of(100).map(&:id) }
+      crowded[:searches] << { user: user.id, q: q, result: Message.search_reachable(user, query(q)).map(&:id) }
     end
   end
 end

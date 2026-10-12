@@ -76,10 +76,7 @@
         <% }) %>
 
         <label class="switch">
-          <input type="checkbox"
-                class="switch__input"
-                <%= page.RestrictRoomCreationToAdministrators ? "checked" : null %>
-                data-action="change->form#submit">
+          <%= Tag.Input(new() { { "type", "checkbox" }, { "class", "switch__input" }, { "checked", page.RestrictRoomCreationToAdministrators }, { "data", new HtmlOptions { { "action", "change->form#submit" } } } }) %>
           <span class="switch__btn round"></span>
           <span class="for-screen-reader">
             Must be admin to create new rooms

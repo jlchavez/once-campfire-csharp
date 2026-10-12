@@ -19,17 +19,21 @@ static class BlobStreams
 {
     const string inline = "inline";
 
+    // `ActiveStorage.streaming_max_ranges`
+    const int streamingMaxRanges = 1;
+
     /// <summary>
-    /// <c>http_cache_forever(public: true)</c> without reading the flash: the session cookie must not
+    /// <c>http_cache_forever(public: true, last_modified:)</c> (the blob proxy passes the blob's
+    /// <c>created_at</c>, else 2011-01-01) without reading the flash: the session cookie must not
     /// be rewritten (<c>ActiveStorage::DisableSession</c>). The etag is the path alone, which is what
     /// <c>fresh_when</c> digests when the flash is empty and the request isn't a turbo frame.
     /// True when the response is already a 304.
     /// </summary>
-    public static bool FreshForever(Controller controller)
+    public static bool FreshForever(Controller controller, DateTimeOffset? lastModified = null)
     {
         controller.ExpiresIn(TimeSpan.FromSeconds(3_155_695_200), isPublic: true, immutable: true);
         controller.Headers["ETag"] = $"W/\"{Controller.EtagDigest(controller.RequestUrl.FullPath)}\"";
-        controller.Headers["Last-Modified"] = Controller.HttpDate(new DateTimeOffset(2011, 1, 1, 0, 0, 0, TimeSpan.Zero));
+        controller.Headers["Last-Modified"] = Controller.HttpDate(lastModified ?? new DateTimeOffset(2011, 1, 1, 0, 0, 0, TimeSpan.Zero));
         if (!controller.IsFresh())
         {
             return false;
@@ -69,7 +73,8 @@ static class BlobStreams
     {
         var size = blob.ByteSize < 0 ? 0 : blob.ByteSize;
         var ranges = RackByteRanges.Parse(rangeHeader, size);
-        if (ranges is null || ranges.Count == 0)
+        // `ranges.length > ActiveStorage.streaming_max_ranges`, which is 1 by default, is a 416 too.
+        if (ranges is null || ranges.Count == 0 || ranges.Count > streamingMaxRanges)
         {
             controller.Head(416);
             return;

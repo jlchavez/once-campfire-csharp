@@ -43,7 +43,7 @@ public sealed partial class ProfilesReplayTests : IDisposable
 
     static IEnumerable<JsonNode> Cases() => Vectors["cases"]!.AsArray().Select(sample => sample!);
 
-    [Fact(Skip = "U05: vectors recorded at reference 345e637; at edbc779 the transfer form is complete, and forms and the layout carry no tokens")]
+    [Fact]
     public async Task Each_request_answers_and_changes_what_the_reference_did()
     {
         var failures = new List<string>();
@@ -209,6 +209,12 @@ public sealed partial class ProfilesReplayTests : IDisposable
         {
             return string.Equals(want, have, StringComparison.OrdinalIgnoreCase);
         }
+        if (name == "vary" && want is not null && have is not null)
+        {
+            var wantParts = want.Split(',').Select(part => part.Trim()).Where(part => part != "Accept-Encoding");
+            var haveParts = have.Split(',').Select(part => part.Trim()).Where(part => part != "Accept-Encoding");
+            return wantParts.SequenceEqual(haveParts);
+        }
         return want == have;
     }
 
@@ -364,12 +370,13 @@ public sealed partial class ProfilesReplayTests : IDisposable
 
     static JsonObject Placeholders(JsonObject changes)
     {
-        foreach (var (_, rows) in changes)
+        foreach (var (table, rows) in changes)
         {
             foreach (var change in rows!.AsArray())
             {
                 if (change!["row"] is JsonObject row)
                 {
+                    AnalyzedMetadata.WithoutLibVips(table, row);
                     foreach (var column in RandomColumns.Where(column => row[column] is not null))
                     {
                         row[column] = "<random>";

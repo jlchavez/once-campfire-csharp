@@ -178,9 +178,7 @@ module Rooms
 end
 class User < FakeRecord; end
 class Account < FakeRecord; end
-class Message < FakeRecord
-  def to_key = [ client_message_id ]
-end
+class Message < FakeRecord; end
 class Boost < FakeRecord; end
 
 # The app's helpers, minus what needs Action Text or models (message presentation, editable_body).

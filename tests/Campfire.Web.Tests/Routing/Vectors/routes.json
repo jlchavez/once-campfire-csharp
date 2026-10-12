@@ -23233,7 +23233,10 @@
       "format": null,
       "content_type": null,
       "formats": [
-        "text/html"
+        "text/html",
+        "image/webp",
+        "application/xml",
+        "*/*"
       ]
     },
     {
@@ -23243,7 +23246,10 @@
       "format": null,
       "content_type": "application/json",
       "formats": [
-        "text/html"
+        "text/html",
+        "image/webp",
+        "application/xml",
+        "*/*"
       ]
     },
     {
@@ -23289,7 +23295,10 @@
       "format": null,
       "content_type": null,
       "formats": [
-        "application/json"
+        "text/html",
+        "image/webp",
+        "application/xml",
+        "*/*"
       ]
     },
     {
@@ -23299,7 +23308,10 @@
       "format": null,
       "content_type": "application/json",
       "formats": [
-        "application/json"
+        "text/html",
+        "image/webp",
+        "application/xml",
+        "*/*"
       ]
     },
     {
@@ -23345,7 +23357,10 @@
       "format": null,
       "content_type": null,
       "formats": [
-        "image/svg+xml"
+        "text/html",
+        "image/webp",
+        "application/xml",
+        "*/*"
       ]
     },
     {
@@ -23355,7 +23370,10 @@
       "format": null,
       "content_type": "application/json",
       "formats": [
-        "image/svg+xml"
+        "text/html",
+        "image/webp",
+        "application/xml",
+        "*/*"
       ]
     },
     {
@@ -23587,7 +23605,9 @@
       "format": null,
       "content_type": null,
       "formats": [
-        "text/html"
+        "application/json",
+        "text/javascript",
+        "*/*"
       ]
     },
     {
@@ -23597,7 +23617,9 @@
       "format": null,
       "content_type": "application/json",
       "formats": [
-        "text/html"
+        "application/json",
+        "text/javascript",
+        "*/*"
       ]
     },
     {
@@ -23643,7 +23665,9 @@
       "format": null,
       "content_type": null,
       "formats": [
-        "application/json"
+        "application/json",
+        "text/javascript",
+        "*/*"
       ]
     },
     {
@@ -23653,7 +23677,9 @@
       "format": null,
       "content_type": "application/json",
       "formats": [
-        "application/json"
+        "application/json",
+        "text/javascript",
+        "*/*"
       ]
     },
     {
@@ -23699,7 +23725,9 @@
       "format": null,
       "content_type": null,
       "formats": [
-        "image/svg+xml"
+        "application/json",
+        "text/javascript",
+        "*/*"
       ]
     },
     {
@@ -23709,7 +23737,9 @@
       "format": null,
       "content_type": "application/json",
       "formats": [
-        "image/svg+xml"
+        "application/json",
+        "text/javascript",
+        "*/*"
       ]
     },
     {

@@ -7,7 +7,7 @@
 
     <%= TurboFrameTag(RecordIdentifier.DomId(message.Record, "new_boost"), null, () => { %>
       <div class="flex-inline message__boost-inline" data-controller="soft-keyboard">
-        <%= LinkTo(Routes.NewMessageBoostPath(message.Id), new() { { "class", "boost__action txt-small btn" }, { "action", "soft-keyboard#open" } }, () => { %>
+        <%= LinkTo(Routes.NewMessageBoostPath(message.Id), new() { { "class", "boost__action txt-small btn" }, { "data", new HtmlOptions { { "action", "soft-keyboard#open" } } } }, () => { %>
           <%= ImageTag("boost.svg", new() { { "size", 20 }, { "aria", new HtmlOptions { { "hidden", "true" } } } }) %>
           <span class="for-screen-reader">Add a boost</span>
         <% }) %>

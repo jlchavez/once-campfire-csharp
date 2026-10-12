@@ -21,6 +21,9 @@
 require "json"
 require "action_controller/test_case"
 
+Rails.logger = ActiveSupport::Logger.new(File::NULL)
+ActiveRecord::Base.logger = nil if defined?(ActiveRecord)
+
 HOST = "campfire.test"
 NOW = Time.now.utc
 WORK = ENV.fetch("PARITY_WORK")

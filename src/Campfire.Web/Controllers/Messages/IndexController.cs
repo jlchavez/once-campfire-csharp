@@ -1,3 +1,4 @@
+using System.Security.Cryptography;
 using System.Text;
 using Campfire.Data.Pagination;
 using Campfire.Data.Queries;
@@ -21,13 +22,6 @@ namespace Campfire.Web.Controllers;
 /// </summary>
 public sealed class MessagesIndexController : ApplicationController
 {
-    /// <summary>
-    /// <c>ActionView::Digestor.digest</c> of <c>messages/index</c> (format nil), which
-    /// <c>EtagWithTemplateDigest</c> adds when the request's formats find that template.
-    /// Captured from the reference; see Vectors/index.rb.
-    /// </summary>
-    public const string IndexTemplateDigest = "8686c9089c0ca2724d567e0bf0e90539";
-
     // RoomScoped's set_room, and the controller's own `before_action :set_room, except: :create`.
     // index is the only action here, so it always runs.
     static readonly ControllerCallbacks<MessagesIndexController> Chain = Callbacks.For<MessagesIndexController>()
@@ -39,8 +33,8 @@ public sealed class MessagesIndexController : ApplicationController
 
     Room CurrentRoom => room ?? throw new InvalidOperationException("set_room hasn't run");
 
-    // `index`: page, then `fresh_when @messages` when there are any, else `head :no_content`.
-    // The 204 happens before format negotiation, so an empty room as JSON is 204, not 406.
+    // `index`: page, then render and `fresh_when` its digest when there are any, else
+    // `head :no_content`. The 204 happens before rendering, so an empty room as JSON is 204.
     async ValueTask IndexAsync()
     {
         var roomId = CurrentRoom.Id;
@@ -52,29 +46,27 @@ public sealed class MessagesIndexController : ApplicationController
             return;
         }
 
-        // EtagWithTemplateDigest runs inside fresh_when, from the template the request's formats
-        // would render. A request that takes no HTML still gets the record etag, then 406.
-        var html = Request.NegotiateMime([MimeType.Html]);
-        var validator = CacheKeys.Expand(messages.Select(message => CacheKeys.Record("messages", message.Id, message.UpdatedAt)));
-        if (FreshWhen(new Freshness { Etag = validator, Template = html is null ? null : IndexTemplateDigest }))
+        // `render_to_string(:index)`: a request that takes no HTML has no template to get (a 500,
+        // as ActionView::MissingTemplate).
+        if (Request.NegotiateMime([MimeType.Html]) is null)
         {
-            return;
-        }
-        if (html is null)
-        {
-            throw new UnknownFormatException();
+            throw new InvalidOperationException("Missing template messages/index");
         }
 
-        // `render partial: "messages/message", collection: @messages, cached: true`, layout false.
-        // A cold fragment cache renders each partial (M02 leaves the cache unimplemented).
-        // ActiveStorage::SetCurrent's URL options are the request's, through View.Origin.
         var page = await ReadAsync(session =>
         {
             var view = NewView(session);
             var loaded = LoadMessages(session, messages);
             return RenderString(w => view.MessagesIndex(w, loaded));
         }).ConfigureAwait(false);
-        Render(page, MimeType.Html.Value);
+
+        // Creator, body and boost edits can change HTML without touching messages:
+        // `fresh_when etag: Digest::SHA256.hexdigest(body), template: false`, then the body as is.
+        if (FreshWhen(new Freshness { Etag = Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(page))) }))
+        {
+            return;
+        }
+        SetResponseBody(page, MimeType.Html.Value);
     }
 
     async ValueTask SetRoomAsync() => room = (await RoomScoped.FindRoomAsync(this).ConfigureAwait(false)).Room;

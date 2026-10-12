@@ -25,10 +25,7 @@ public sealed partial class WriteControllerTests : IDisposable
 
     // Cases whose rendered message differs from the reference for a reason outside this task: the
     // body, its ETag and the broadcast payloads aren't compared; everything else is.
-
-    static readonly Dictionary<string, string> KnownDifferences = new()
-    {
-    };
+    static readonly Dictionary<string, string> KnownDifferences = [];
 
     static readonly JsonSerializerOptions Unescaped = new() { Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping };
 
@@ -139,9 +136,6 @@ public sealed partial class WriteControllerTests : IDisposable
     // when the request rendered the message itself: Rails serves the `cache [message, ...]`
     // fragment a broadcast rendered (without a session, so without tokens) when there is one, and
     // fragment caching isn't modeled (M02's known gap), so those tokens are left out on both sides.
-    //
-    // At edbc779 a message's DOM ids are keyed by its id (Message#to_key removed, 7df98ac), which
-    // U05 ports with the rest of the message markup; until then both spellings read the same.
     static string Normalize(string text) =>
         Uuid().Replace(CsrfMeta().Replace(AuthenticityToken().Replace(BoostFormToken().Replace(text, "$1"), "$1<token>\""), "$1<token>\""), placeholder);
 
@@ -323,7 +317,6 @@ public sealed partial class WriteControllerTests : IDisposable
 
     [GeneratedRegex("[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}")]
     private static partial Regex Uuid();
-
 
     [GeneratedRegex("/([0-9]+)$")]
     private static partial Regex GidId();

@@ -7,8 +7,8 @@ namespace Campfire.RichText.Tests.Editing;
 
 /// <summary>
 /// The <c>&lt;lexxy-editor&gt;</c> value against what the reference built for every body in
-/// <c>vectors/richtext/expected.json</c>: <c>editable_body(message)</c> as <c>rich_textarea_tag</c>
-/// reads it, its <c>to_editor_html</c>.
+/// <c>vectors/richtext/expected.json</c> (<c>Editing/Vectors/editable.json</c>, at edbc779):
+/// <c>editable_body(message)</c> as <c>rich_textarea_tag</c> reads it, its <c>to_editor_html</c>.
 /// </summary>
 public class EditableVectorTests
 {

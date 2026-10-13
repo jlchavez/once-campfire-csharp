@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Globalization;
 using System.Text;
 using Microsoft.Data.Sqlite;
@@ -5,10 +6,14 @@ using Microsoft.Data.Sqlite;
 namespace Campfire.Web.ResponseCache;
 
 /// <summary>
-/// A read-only observer of one SQLite file (reference/app/models/response_cache.rb).
+/// Observes one SQLite file through read-only connections (reference/app/models/response_cache.rb).
 /// <c>PRAGMA data_version</c> moves forward on every commit, including commits from another
-/// process, and can only be compared on this same connection. A path change or
-/// <see cref="Clear"/> drops the connection, so the next version carries a new namespace.
+/// process, and can only be compared on the connection that read it. Rails keeps one observer
+/// connection and queries it under the cache mutex; here each caller takes an observer from a
+/// pool and queries it outside the mutex. An observer that sees its data_version move advances
+/// the cache's generation and drops every entry, as Rails does when its one data_version moves;
+/// a newly opened observer counts as moved, since commits before it opened went unseen. A path
+/// change or <see cref="Clear"/> drops the observers, so the next version carries a new namespace.
 /// </summary>
 public sealed class ResponseCache
 {
@@ -27,11 +32,11 @@ public sealed class ResponseCache
     readonly SemaphoreSlim[] renderLocks = [.. Enumerable.Range(0, renderLockCount).Select(_ => new SemaphoreSlim(1, 1))];
     readonly Func<string> databasePath;
 
-    SqliteConnection? observer;
-    SqliteCommand? dataVersionCommand;
+    readonly ConcurrentBag<Observer> idleObservers = [];
     string? database;
     string? ns;
-    long? dataVersion;
+    long epoch;
+    long generation;
     long usedBytes;
     int reads;
     int writes;
@@ -75,10 +80,7 @@ public sealed class ResponseCache
     {
         try
         {
-            lock (mutex)
-            {
-                return CurrentUnlocked();
-            }
+            return Current();
         }
         catch (SqliteException)
         {
@@ -94,9 +96,10 @@ public sealed class ResponseCache
         Interlocked.Increment(ref reads);
         try
         {
+            Current();
             lock (mutex)
             {
-                return CurrentUnlocked() == version && entries.TryGetValue(key, out var entry) ? entry.Page : null;
+                return IsCurrentUnlocked(version) && entries.TryGetValue(key, out var entry) ? entry.Page : null;
             }
         }
         catch (SqliteException)
@@ -163,9 +166,10 @@ public sealed class ResponseCache
         }
         try
         {
+            Current();
             lock (mutex)
             {
-                if (CurrentUnlocked() != version || entries.ContainsKey(key))
+                if (!IsCurrentUnlocked(version) || entries.ContainsKey(key))
                 {
                     return;
                 }
@@ -189,63 +193,145 @@ public sealed class ResponseCache
         }
     }
 
-    /// <summary><c>clear</c>: drop every entry and the observer, so the next version is a new namespace.</summary>
+    /// <summary><c>clear</c>: drop every entry and the observers, so the next version is a new namespace.</summary>
     public void Clear()
     {
         lock (mutex)
         {
-            entries.Clear();
-            order.Clear();
-            usedBytes = 0;
-            dataVersionCommand?.Dispose();
-            dataVersionCommand = null;
-            observer?.Dispose();
-            observer = null;
-            database = null;
-            ns = null;
-            dataVersion = null;
+            ResetUnlocked();
+        }
+        DisposeIdleObservers();
+    }
+
+    // current_version: observe data_version on a pooled observer without holding the mutex, then
+    // advance the generation under it if that observer saw a commit.
+    CacheVersion Current()
+    {
+        while (true)
+        {
+            var path = Path.GetFullPath(databasePath());
+            long observedEpoch;
+            lock (mutex)
+            {
+                if (database != path || ns is null)
+                {
+                    ResetUnlocked();
+                    database = path;
+                    ns = Guid.NewGuid().ToString("N", CultureInfo.InvariantCulture);
+                }
+                observedEpoch = epoch;
+            }
+            if (!idleObservers.TryTake(out var observer))
+            {
+                observer = new Observer(path, observedEpoch);
+            }
+            var healthy = false;
+            try
+            {
+                var moved = observer.Epoch != observedEpoch || observer.Observe();
+                healthy = observer.Epoch == observedEpoch;
+                lock (mutex)
+                {
+                    if (epoch != observedEpoch || observer.Epoch != observedEpoch)
+                    {
+                        // A path change or Clear came between: observe again in the new namespace.
+                        continue;
+                    }
+                    if (moved)
+                    {
+                        generation++;
+                        DropEntriesUnlocked();
+                    }
+                    return new CacheVersion(database!, ns!, generation);
+                }
+            }
+            finally
+            {
+                if (healthy && Volatile.Read(ref epoch) == observer.Epoch)
+                {
+                    idleObservers.Add(observer);
+                }
+                else
+                {
+                    observer.Dispose();
+                }
+            }
         }
     }
 
-    // current_version, called with the mutex held.
-    CacheVersion? CurrentUnlocked()
+    bool IsCurrentUnlocked(CacheVersion? version) =>
+        version is not null && version.Database == database && version.Namespace == ns && version.DataVersion == generation;
+
+    // A new namespace: observers from before it are disposed when they come back.
+    void ResetUnlocked()
     {
-        var path = Path.GetFullPath(databasePath());
-        if (observer is null || database != path)
+        DropEntriesUnlocked();
+        epoch++;
+        database = null;
+        ns = null;
+    }
+
+    void DropEntriesUnlocked()
+    {
+        entries.Clear();
+        order.Clear();
+        usedBytes = 0;
+    }
+
+    void DisposeIdleObservers()
+    {
+        while (idleObservers.TryTake(out var observer))
         {
-            entries.Clear();
-            order.Clear();
-            usedBytes = 0;
-            dataVersionCommand?.Dispose();
-            dataVersionCommand = null;
-            observer?.Dispose();
-            observer = null;
-            dataVersion = null;
-            var connection = new SqliteConnection(new SqliteConnectionStringBuilder
+            observer.Dispose();
+        }
+    }
+
+    // One read-only connection and its prepared data_version query, with the last value it read.
+    sealed class Observer : IDisposable
+    {
+        readonly SqliteConnection connection;
+        readonly SqliteCommand command;
+        long? seen;
+
+        public Observer(string path, long epoch)
+        {
+            Epoch = epoch;
+            connection = new SqliteConnection(new SqliteConnectionStringBuilder
             {
                 DataSource = path,
                 Mode = SqliteOpenMode.ReadOnly,
                 Pooling = false,
             }.ToString());
-            connection.Open();
-            observer = connection;
-            dataVersionCommand = connection.CreateCommand();
-            dataVersionCommand.CommandText = "PRAGMA data_version";
-            dataVersionCommand.Prepare();
-            database = path;
-            ns = Guid.NewGuid().ToString("N", CultureInfo.InvariantCulture);
+            try
+            {
+                connection.Open();
+                command = connection.CreateCommand();
+                command.CommandText = "PRAGMA data_version";
+                command.Prepare();
+            }
+            catch
+            {
+                connection.Dispose();
+                throw;
+            }
         }
-        // Prepared once per observer: preparing it on every call was most of the time spent
-        // holding the mutex, which every request takes several times.
-        var current = Convert.ToInt64(dataVersionCommand!.ExecuteScalar(), CultureInfo.InvariantCulture);
-        if (dataVersion != current)
+
+        public long Epoch { get; }
+
+        // Whether data_version moved since this observer last read it; true on its first read.
+        public bool Observe()
         {
-            entries.Clear();
-            order.Clear();
-            usedBytes = 0;
-            dataVersion = current;
+            var current = Convert.ToInt64(command.ExecuteScalar(), CultureInfo.InvariantCulture);
+            var moved = seen != current;
+            seen = current;
+            return moved;
         }
-        return new CacheVersion(database!, ns!, dataVersion!.Value);
+
+        public void Dispose()
+        {
+            command?.Dispose();
+            connection.Dispose();
+        }
     }
 
     static int HeaderBytes(IReadOnlyList<(string Name, string Value)> headers)

@@ -45,6 +45,38 @@ public sealed class ResponseCacheTests : IDisposable
         Assert.Equal("fresh", Body(cache.Read("page", cache.Version())));
     }
 
+    // Concurrent callers each observe data_version on their own pooled connection. However many
+    // observers there are and whichever one a caller gets, a commit expires what came before it.
+    [Fact]
+    public async Task Every_pooled_observer_sees_a_foreign_commit()
+    {
+        await Task.WhenAll(Enumerable.Range(0, 16).Select(_ => Task.Run(() => cache.Version(), TestContext.Current.CancellationToken)));
+        var before = cache.Version();
+        cache.Write("page", before, Entry("before"));
+
+        Commit("INSERT INTO values_for_test VALUES ('committed')");
+
+        var after = await Task.WhenAll(Enumerable.Range(0, 16).Select(_ => Task.Run(() => cache.Version(), TestContext.Current.CancellationToken)));
+        Assert.All(after, version => Assert.NotEqual(before, version));
+        Assert.Null(cache.Read("page", cache.Version()));
+    }
+
+    // data_version can't be compared across connections, so an observer opened after a commit
+    // must not take that commit's data_version as already seen.
+    [Fact]
+    public async Task A_new_observer_does_not_hide_a_commit_before_it_opened()
+    {
+        var version = cache.Version();
+        cache.Write("page", version, Entry("before"));
+
+        Commit("INSERT INTO values_for_test VALUES ('committed')");
+        // Two at once: at least one of them opens a new observer.
+        var versions = await Task.WhenAll(Enumerable.Range(0, 2).Select(_ => Task.Run(() => cache.Version(), TestContext.Current.CancellationToken)));
+
+        Assert.All(versions, current => Assert.NotEqual(version, current));
+        Assert.Null(cache.Read("page", version));
+    }
+
     [Fact]
     public void Byte_budget_evicts_oldest_and_bypasses_oversized_entries_and_keys()
     {

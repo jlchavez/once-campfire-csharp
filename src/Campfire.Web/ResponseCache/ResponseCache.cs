@@ -28,6 +28,7 @@ public sealed class ResponseCache
     readonly Func<string> databasePath;
 
     SqliteConnection? observer;
+    SqliteCommand? dataVersionCommand;
     string? database;
     string? ns;
     long? dataVersion;
@@ -196,6 +197,8 @@ public sealed class ResponseCache
             entries.Clear();
             order.Clear();
             usedBytes = 0;
+            dataVersionCommand?.Dispose();
+            dataVersionCommand = null;
             observer?.Dispose();
             observer = null;
             database = null;
@@ -213,6 +216,8 @@ public sealed class ResponseCache
             entries.Clear();
             order.Clear();
             usedBytes = 0;
+            dataVersionCommand?.Dispose();
+            dataVersionCommand = null;
             observer?.Dispose();
             observer = null;
             dataVersion = null;
@@ -224,12 +229,15 @@ public sealed class ResponseCache
             }.ToString());
             connection.Open();
             observer = connection;
+            dataVersionCommand = connection.CreateCommand();
+            dataVersionCommand.CommandText = "PRAGMA data_version";
+            dataVersionCommand.Prepare();
             database = path;
             ns = Guid.NewGuid().ToString("N", CultureInfo.InvariantCulture);
         }
-        using var command = observer.CreateCommand();
-        command.CommandText = "PRAGMA data_version";
-        var current = Convert.ToInt64(command.ExecuteScalar(), CultureInfo.InvariantCulture);
+        // Prepared once per observer: preparing it on every call was most of the time spent
+        // holding the mutex, which every request takes several times.
+        var current = Convert.ToInt64(dataVersionCommand!.ExecuteScalar(), CultureInfo.InvariantCulture);
         if (dataVersion != current)
         {
             entries.Clear();

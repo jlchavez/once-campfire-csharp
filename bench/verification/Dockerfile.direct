@@ -1,0 +1,15 @@
+# The production image with Thruster taken out of bin/boot: Kestrel itself listens on HTTP_PORT,
+# the port the harness measures, the way the Go, Rust and C images serve it from the app process.
+# Benchmark only. It has none of Thruster's TLS, ACME or X-Sendfile, so it is not a ONCE image.
+#
+#   docker build -f bench/verification/Dockerfile.direct --build-arg BASE_IMAGE=campfire-csharp:perf3 \
+#     -t campfire-csharp:perf3-direct bench/verification
+ARG BASE_IMAGE=campfire-csharp:app
+FROM ${BASE_IMAGE}
+
+COPY --chmod=755 <<'BOOT' /rails/bin/boot
+#!/bin/sh
+PORT="${HTTP_PORT:-${PORT:-80}}" exec /usr/local/bin/campfire server
+BOOT
+
+LABEL org.opencontainers.image.description="Campfire C# without Thruster, for benchmarks only"

@@ -34,8 +34,6 @@ public static partial class AttachmentResolution
     [GeneratedRegex("(gid://campfire/[^/]+/[0-9]+)")]
     private static partial Regex MarshaledGid();
 
-    static readonly JsonDocumentOptions RubyJson = new() { CommentHandling = JsonCommentHandling.Skip };
-
     public static bool IsAttachment(HtmlNode node) => node is HtmlElement element && element.Name == TagName;
 
     /// <summary>
@@ -128,7 +126,7 @@ public static partial class AttachmentResolution
             return null;
         }
 
-        var root = ParseJson(DecodeBase64(message));
+        var root = RubyJsonParser.Parse(DecodeBase64(message));
         if (root.ValueKind != JsonValueKind.Object)
         {
             throw new RichTextRaisedException("NoMethodError: undefined method 'dig'");
@@ -192,100 +190,6 @@ public static partial class AttachmentResolution
             ? value
             : null;
 
-    // JSON.parse takes the bytes as UTF-8. Its error message quotes 32 bytes from the parser
-    // cursor (json parser.c, PARSE_ERROR_FRAGMENT_LEN), and logging that quote raises when the
-    // quote itself isn't valid UTF-8. Bytes outside the quote don't matter: a document can be
-    // invalid UTF-8 and still log.
-    static JsonElement ParseJson(byte[] bytes)
-    {
-        var text = Encoding.UTF8.GetString(bytes);
-        try
-        {
-            using var document = JsonDocument.Parse(text, RubyJson);
-            return document.RootElement.Clone();
-        }
-        catch (JsonException)
-        {
-            throw new RichTextRaisedException("JSON::ParserError", unloggable: !JsonErrorIsLoggable(bytes));
-        }
-    }
-
-    /// <summary>
-    /// Whether <c>JSON::ParserError#message</c> can be logged. The quote is the bytes at the
-    /// parser cursor, stopped at ASCII whitespace or NUL, with a trailing partial UTF-8 character
-    /// trimmed (<c>build_parse_error_message</c>).
-    /// </summary>
-    static bool JsonErrorIsLoggable(byte[] bytes)
-    {
-        int cursor;
-        try
-        {
-            JsonDocument.Parse(bytes, RubyJson);
-            // The raw bytes parsed and the replaced string did not: the quote isn't what failed.
-            return true;
-        }
-        catch (JsonException e)
-        {
-            cursor = JsonCursor(bytes, e);
-        }
-
-        if ((uint)cursor >= (uint)bytes.Length)
-        {
-            return true;
-        }
-
-        var len = 0;
-        while (len < 32 && cursor + len < bytes.Length)
-        {
-            var ch = bytes[cursor + len];
-            if (ch is 0 or (byte)'\n' or (byte)' ' or (byte)'\t' or (byte)'\r')
-            {
-                break;
-            }
-            len++;
-        }
-
-        if (len == 0)
-        {
-            // No bounded quote: sprintf reads from the cursor through the next NUL.
-            var end = cursor;
-            while (end < bytes.Length && bytes[end] != 0)
-            {
-                end++;
-            }
-            return System.Text.Unicode.Utf8.IsValid(bytes.AsSpan(cursor, end - cursor));
-        }
-
-        // buffer[len] is the last copied byte; drop a trailing continuation, then one lead byte.
-        var n = len;
-        while (n > 0 && bytes[cursor + n - 1] >= 0x80 && bytes[cursor + n - 1] < 0xC0)
-        {
-            n--;
-        }
-        if (n > 0 && bytes[cursor + n - 1] >= 0xC0)
-        {
-            n--;
-        }
-        return System.Text.Unicode.Utf8.IsValid(bytes.AsSpan(cursor, n));
-    }
-
-    static int JsonCursor(byte[] bytes, JsonException error)
-    {
-        var offset = 0;
-        var lineNumber = error.LineNumber.GetValueOrDefault();
-        for (var line = 0L; line < lineNumber && offset < bytes.Length; line++)
-        {
-            var newline = Array.IndexOf(bytes, (byte)'\n', offset);
-            if (newline < 0)
-            {
-                return bytes.Length;
-            }
-            offset = newline + 1;
-        }
-        var column = (int)error.BytePositionInLine.GetValueOrDefault();
-        return column < 0 ? offset : offset + column;
-    }
-
     /// <summary><c>Base64.strict_decode64(message) rescue Base64.urlsafe_decode64(message)</c></summary>
     static byte[] DecodeBase64(string message) =>
         RubyBase64.StrictDecode(message)
@@ -301,7 +205,12 @@ public static partial class AttachmentResolution
             return null;
         }
 
-        var host = context.RequestHost ?? "";
+        return AttributesFromNode(node, context.RequestHost ?? "");
+    }
+
+    /// <summary><c>attributes_from_node</c>: the embed's details, from Trix's attributes or Lexxy's content markup.</summary>
+    public static OpengraphEmbed AttributesFromNode(HtmlElement node, string host)
+    {
         if (!RubyText.IsBlank(node.GetAttribute("filename")))
         {
             // Trix serialized the embed's details as attributes of the node
@@ -317,16 +226,25 @@ public static partial class AttachmentResolution
     /// <summary><c>attributes_from_content</c>: the details Lexxy serializes as the embed's content markup.</summary>
     static OpengraphEmbed EmbedFromContent(string content, string host)
     {
-        var fragment = HtmlParser.ParseFragment(content);
-        var elements = fragment.Descendants().OfType<HtmlElement>().ToList();
+        var (href, image, title, description) = ContentDetails(content);
+        return new OpengraphEmbed(OpengraphEmbedUrl.WebUrl(href, host), OpengraphEmbedUrl.WebUrl(image, host), title, description);
+    }
+
+    /// <summary>
+    /// What <c>attributes_from_content</c> reads from the content markup before checking its URLs.
+    /// Rails parses it with <c>Nokogiri::HTML.fragment</c>, libxml2's legacy parser, not HTML5.
+    /// </summary>
+    public static (string? Href, string? Image, string? Title, string? Description) ContentDetails(string content)
+    {
+        var elements = LegacyHtmlParser.ParseFragment(content).Descendants().OfType<HtmlElement>().ToList();
         var title = elements.FirstOrDefault(e => RubyText.HasClass(e.GetAttribute("class"), "og-embed__title"));
         var link = title?.Descendants().OfType<HtmlElement>().FirstOrDefault(e => e.IsHtml("a"));
         var image = elements.FirstOrDefault(e => e.IsHtml("img") && HasAncestorWithClass(e, "og-embed__image"));
         var description = elements.FirstOrDefault(e => RubyText.HasClass(e.GetAttribute("class"), "og-embed__description"));
 
-        return new OpengraphEmbed(
-            OpengraphEmbedUrl.WebUrl(link?.GetAttribute("href"), host),
-            OpengraphEmbedUrl.WebUrl(image?.GetAttribute("src"), host),
+        return (
+            link?.GetAttribute("href"),
+            image?.GetAttribute("src"),
             (link ?? title) is { } named ? RubyString.Strip(named.TextContent) : null,
             description is null ? null : RubyString.Strip(description.TextContent));
     }

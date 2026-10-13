@@ -135,6 +135,13 @@ ENV HTTP_IDLE_TIMEOUT=60
 ENV HTTP_READ_TIMEOUT=300
 ENV HTTP_WRITE_TIMEOUT=300
 
+# DATAS, .NET's adaptive GC heap count (on by default), leaves the process paused in gen0
+# collections about 6% of the time under benchmark load; off, about 2%. With request logging quiet
+# that was worth 4 to 12 percentage points of throughput. Off holds more heap: about 65 MB more under
+# HTTP load, and a higher peak with 1,000 live sockets (548 to 767 MB). Set
+# DOTNET_GCDynamicAdaptationMode=1 when starting the container to get the default back.
+ENV DOTNET_GCDynamicAdaptationMode=0
+
 # Set version and revision
 ARG APP_VERSION
 ENV APP_VERSION=$APP_VERSION

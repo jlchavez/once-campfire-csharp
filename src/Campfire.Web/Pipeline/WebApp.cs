@@ -109,7 +109,9 @@ public sealed partial class WebApp
     /// The middleware Rails runs around the router, outermost first: <c>Rack::Deflater</c>
     /// (config.ru), <c>Rack::Runtime</c> (<c>X-Runtime</c>) and <c>ActionDispatch::RequestId</c>
     /// (<c>X-Request-Id</c>). The router's response is buffered so they can see it whole, error
-    /// pages included; a controller that streams its body goes through <see cref="ResponseOutput"/>.
+    /// pages included; a controller that streams its body goes through <see cref="ResponseOutput"/>,
+    /// and a controller's rendered body is handed over in <see cref="ResponseOutput.Body"/> rather
+    /// than copied into the buffer.
     /// </summary>
     public async Task HandleAsync(HttpContext context)
     {
@@ -146,8 +148,26 @@ public sealed partial class WebApp
         {
             output.AddHeaders();
             var rackLength = output.Buffered ? null : context.Response.ContentLength;
-            await RackDeflater.SendAsync(context, buffer.GetBuffer().AsMemory(0, (int)buffer.Length), rackLength, output.Stream).ConfigureAwait(false);
+            await RackDeflater.SendAsync(context, BufferedBody(output, buffer), rackLength, output.Stream).ConfigureAwait(false);
         }
+    }
+
+    // The controller's body, followed by anything written to the buffer.
+    static ReadOnlyMemory<byte> BufferedBody(ResponseOutput output, MemoryStream buffer)
+    {
+        var written = buffer.GetBuffer().AsMemory(0, (int)buffer.Length);
+        if (output.Body is not { } body)
+        {
+            return written;
+        }
+        if (written.IsEmpty)
+        {
+            return body;
+        }
+        var joined = new byte[body.Length + written.Length];
+        body.CopyTo(joined);
+        written.CopyTo(joined.AsMemory(body.Length));
+        return joined;
     }
 
     /// <summary>
@@ -187,6 +207,12 @@ public sealed class ResponseOutput(Stream stream, Action addHeaders)
     /// deflater looks at (error pages do set one).
     /// </summary>
     public bool Buffered { get; set; }
+
+    /// <summary>
+    /// A controller's rendered body, sent as it is. Room pages run to hundreds of kilobytes, and
+    /// copying them into a growing buffer reallocated it through the large object heap.
+    /// </summary>
+    public ReadOnlyMemory<byte>? Body { get; set; }
 
     /// <summary>An error that escaped Rails' exception handling (Puma answers a bare 500).</summary>
     public bool LowLevelError { get; set; }

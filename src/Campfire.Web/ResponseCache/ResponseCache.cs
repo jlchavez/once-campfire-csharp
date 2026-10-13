@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using System.Globalization;
+using System.IO.MemoryMappedFiles;
 using System.Text;
 using Microsoft.Data.Sqlite;
 
@@ -9,7 +10,9 @@ namespace Campfire.Web.ResponseCache;
 /// Observes one SQLite file through read-only connections (reference/app/models/response_cache.rb).
 /// <c>PRAGMA data_version</c> moves forward on every commit, including commits from another
 /// process, and can only be compared on the connection that read it. Rails keeps one observer
-/// connection and queries it under the cache mutex; here each caller takes an observer from a
+/// connection and queries it under the cache mutex. Here, a database in WAL mode is observed by
+/// comparing its WAL-index header under the mutex, which is what moves data_version (see
+/// <see cref="WalIndex"/>). Otherwise each caller takes an observer from a
 /// pool and queries it outside the mutex. An observer that sees its data_version move advances
 /// the cache's generation and drops every entry, as Rails does when its one data_version moves;
 /// a newly opened observer counts as moved, since commits before it opened went unseen. A path
@@ -33,6 +36,8 @@ public sealed class ResponseCache
     readonly Func<string> databasePath;
 
     readonly ConcurrentBag<Observer> idleObservers = [];
+    WalIndex? walIndex;
+    long walIndexEpoch = -1;
     string? database;
     string? ns;
     long epoch;
@@ -55,6 +60,18 @@ public sealed class ResponseCache
 
     /// <summary>How many times <see cref="Read"/> was entered.</summary>
     public int Reads => Volatile.Read(ref reads);
+
+    /// <summary>Whether commits are observed through the WAL-index header rather than <c>PRAGMA data_version</c>.</summary>
+    internal bool ObservesWalIndex
+    {
+        get
+        {
+            lock (mutex)
+            {
+                return walIndex is not null;
+            }
+        }
+    }
 
     /// <summary>
     /// <c>budget</c>: <c>CAMPFIRE_RESPONSE_CACHE_MB</c> (default 64, <c>to_i</c> then at least 0)
@@ -203,8 +220,9 @@ public sealed class ResponseCache
         DisposeIdleObservers();
     }
 
-    // current_version: observe data_version on a pooled observer without holding the mutex, then
-    // advance the generation under it if that observer saw a commit.
+    // current_version: in WAL mode, compare the WAL-index header under the mutex. Otherwise observe
+    // data_version on a pooled observer without holding the mutex, then advance the generation
+    // under it if that observer saw a commit.
     CacheVersion Current()
     {
         while (true)
@@ -220,6 +238,20 @@ public sealed class ResponseCache
                     ns = Guid.NewGuid().ToString("N", CultureInfo.InvariantCulture);
                 }
                 observedEpoch = epoch;
+                if (walIndex is not null)
+                {
+                    if (walIndex.Observe())
+                    {
+                        generation++;
+                        DropEntriesUnlocked();
+                    }
+                    return new CacheVersion(database, ns, generation);
+                }
+            }
+            if (Volatile.Read(ref walIndexEpoch) != observedEpoch)
+            {
+                OpenWalIndex(path, observedEpoch);
+                continue;
             }
             if (!idleObservers.TryTake(out var observer))
             {
@@ -259,6 +291,23 @@ public sealed class ResponseCache
         }
     }
 
+    // Tried once per namespace. Opening runs SQLite statements, so it happens outside the mutex;
+    // when two callers race, the first one kept wins.
+    void OpenWalIndex(string path, long observedEpoch)
+    {
+        var opened = WalIndex.Open(path);
+        lock (mutex)
+        {
+            if (epoch == observedEpoch && walIndexEpoch != observedEpoch)
+            {
+                walIndex = opened;
+                walIndexEpoch = observedEpoch;
+                return;
+            }
+        }
+        opened?.Dispose();
+    }
+
     bool IsCurrentUnlocked(CacheVersion? version) =>
         version is not null && version.Database == database && version.Namespace == ns && version.DataVersion == generation;
 
@@ -269,6 +318,8 @@ public sealed class ResponseCache
         epoch++;
         database = null;
         ns = null;
+        walIndex?.Dispose();
+        walIndex = null;
     }
 
     void DropEntriesUnlocked()
@@ -296,15 +347,9 @@ public sealed class ResponseCache
         public Observer(string path, long epoch)
         {
             Epoch = epoch;
-            connection = new SqliteConnection(new SqliteConnectionStringBuilder
-            {
-                DataSource = path,
-                Mode = SqliteOpenMode.ReadOnly,
-                Pooling = false,
-            }.ToString());
+            connection = OpenReadOnly(path);
             try
             {
-                connection.Open();
                 command = connection.CreateCommand();
                 command.CommandText = "PRAGMA data_version";
                 command.Prepare();
@@ -331,6 +376,118 @@ public sealed class ResponseCache
         {
             command?.Dispose();
             connection.Dispose();
+        }
+    }
+
+    /// <summary>
+    /// The WAL-index header in the <c>-shm</c> file (https://www.sqlite.org/walformat.html, "The
+    /// WAL-Index Header"). Every commit rewrites it: the second copy, a barrier, then the first.
+    /// A reader that begins a transaction compares the whole header with the copy it saw last,
+    /// and a difference is what moves its data_version (sqlite3 <c>walIndexReadHdr</c> and
+    /// <c>pagerBeginReadTransaction</c>). Comparing the header here reaches the same answer as
+    /// <c>PRAGMA data_version</c> without running a statement, and it still sees commits from
+    /// other processes. The connection stays open while the header is read: it keeps the
+    /// database in WAL mode and the <c>-shm</c> file in place.
+    /// </summary>
+    sealed class WalIndex : IDisposable
+    {
+        const int headerBytes = 48;
+        const int isInitOffset = 12;
+
+        readonly SqliteConnection connection;
+        readonly MemoryMappedFile file;
+        readonly MemoryMappedViewAccessor view;
+        readonly byte[] first = new byte[headerBytes];
+        readonly byte[] second = new byte[headerBytes];
+        readonly byte[] seen = new byte[headerBytes];
+        bool hasSeen;
+
+        WalIndex(SqliteConnection connection, MemoryMappedFile file, MemoryMappedViewAccessor view)
+        {
+            this.connection = connection;
+            this.file = file;
+            this.view = view;
+        }
+
+        // Null when the database is not in WAL mode or its -shm file can't be mapped.
+        public static WalIndex? Open(string path)
+        {
+            var connection = OpenReadOnly(path);
+            MemoryMappedFile? file = null;
+            try
+            {
+                using var command = connection.CreateCommand();
+                // A read transaction opens the WAL and the -shm file before journal_mode reports wal.
+                command.CommandText = "PRAGMA data_version";
+                command.ExecuteScalar();
+                command.CommandText = "PRAGMA journal_mode";
+                if (!string.Equals(command.ExecuteScalar() as string, "wal", StringComparison.OrdinalIgnoreCase))
+                {
+                    connection.Dispose();
+                    return null;
+                }
+                var stream = new FileStream(path + "-shm", FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+                file = MemoryMappedFile.CreateFromFile(stream, null, 0, MemoryMappedFileAccess.Read, HandleInheritability.None, leaveOpen: false);
+                return new WalIndex(connection, file, file.CreateViewAccessor(0, 2 * headerBytes, MemoryMappedFileAccess.Read));
+            }
+            catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or ArgumentException)
+            {
+                file?.Dispose();
+                connection.Dispose();
+                return null;
+            }
+            catch
+            {
+                file?.Dispose();
+                connection.Dispose();
+                throw;
+            }
+        }
+
+        // Whether the header changed since the last call; true on the first call. Copies that
+        // differ (a commit is writing them) or an uninitialized header count as moved and are
+        // compared again next time.
+        public bool Observe()
+        {
+            view.ReadArray(0, first, 0, headerBytes);
+            Interlocked.MemoryBarrier();
+            view.ReadArray(headerBytes, second, 0, headerBytes);
+            if (!first.AsSpan().SequenceEqual(second) || first[isInitOffset] == 0)
+            {
+                hasSeen = false;
+                return true;
+            }
+            var moved = !hasSeen || !first.AsSpan().SequenceEqual(seen);
+            first.CopyTo(seen, 0);
+            hasSeen = true;
+            return moved;
+        }
+
+        public void Dispose()
+        {
+            view.Dispose();
+            file.Dispose();
+            connection.Dispose();
+        }
+    }
+
+    static SqliteConnection OpenReadOnly(string path)
+    {
+        var connection = new SqliteConnection(new SqliteConnectionStringBuilder
+        {
+            DataSource = path,
+            Mode = SqliteOpenMode.ReadOnly,
+            Pooling = false,
+        }.ToString());
+        try
+        {
+            connection.Open();
+            return connection;
+        }
+        catch
+        {
+            connection.Dispose();
+            throw;
         }
     }
 

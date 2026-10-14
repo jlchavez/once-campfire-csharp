@@ -62,6 +62,9 @@ public static class ServerCommand
         ArgumentNullException.ThrowIfNull(settings);
         ArgumentNullException.ThrowIfNull(assets);
         var builder = WebApplication.CreateSlimBuilder(args);
+        // config.log_level = ENV.fetch("RAILS_LOG_LEVEL", "info"). Logging__LogLevel__* in the
+        // environment still overrides it per category.
+        builder.Logging.SetMinimumLevel(settings.LogLevel);
         builder.WebHost.ConfigureKestrel(kestrel =>
         {
             // Puma sends no Server header and takes bodies of any size.

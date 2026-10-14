@@ -95,8 +95,16 @@ WORKDIR /rails
 # Thruster sets PORT to TARGET_PORT (3000) for the app, proxies to it, relays SIGTERM and exits
 # with the app's status. Its environment (HTTP_PORT, HTTPS_PORT, TLS_DOMAIN, ACME_DIRECTORY,
 # HTTP_*_TIMEOUT, ... and their THRUSTER_ forms) means what it does in the reference image.
+#
+# CAMPFIRE_THRUSTER=0 (the port's own switch; the reference has none) runs `campfire server` alone,
+# listening on PORT (3000 unless set): no TLS, HTTP/2, X-Forwarded-* headers, public/ files or 502
+# page. It is for running behind another proxy, and for measuring the app without the proxy hop,
+# which costs about 0.5 to 0.8 ms of CPU per request (bench/README.md). Unset, nothing changes.
 COPY --chmod=755 <<'EOF' /rails/bin/boot
 #!/bin/sh
+if [ "${CAMPFIRE_THRUSTER:-1}" = "0" ]; then
+  exec /usr/local/bin/campfire server
+fi
 exec /usr/local/bin/thrust /usr/local/bin/campfire server
 EOF
 
@@ -126,6 +134,13 @@ ENV RAILS_ENV="production" \
 ENV HTTP_IDLE_TIMEOUT=60
 ENV HTTP_READ_TIMEOUT=300
 ENV HTTP_WRITE_TIMEOUT=300
+
+# DATAS, .NET's adaptive GC heap count (on by default), leaves the process paused in gen0
+# collections about 6% of the time under benchmark load; off, about 2%. With request logging quiet
+# that was worth 4 to 12 percentage points of throughput. Off holds more heap: about 65 MB more under
+# HTTP load, and a higher peak with 1,000 live sockets (548 to 767 MB). Set
+# DOTNET_GCDynamicAdaptationMode=1 when starting the container to get the default back.
+ENV DOTNET_GCDynamicAdaptationMode=0
 
 # Set version and revision
 ARG APP_VERSION

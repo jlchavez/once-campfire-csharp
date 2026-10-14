@@ -1,4 +1,5 @@
 using Campfire.Server.Cli;
+using Microsoft.Extensions.Logging;
 
 namespace Campfire.Server.Tests.Cli;
 
@@ -86,5 +87,33 @@ public sealed class ServerSettingsTests : IDisposable
     {
         var error = Assert.Throws<SettingsException>(() => root.Settings((name, value)));
         Assert.Contains(name, error.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void The_log_level_is_info_like_the_reference()
+    {
+        Assert.Equal(LogLevel.Information, root.Settings().LogLevel);
+        Assert.Equal(LogLevel.Information, root.Settings(("RAILS_LOG_LEVEL", "")).LogLevel);
+    }
+
+    // Logger::Severity's names in any case; `unknown` is above `fatal`, so it logs nothing.
+    [Theory]
+    [InlineData("debug", LogLevel.Debug)]
+    [InlineData("info", LogLevel.Information)]
+    [InlineData("warn", LogLevel.Warning)]
+    [InlineData("WARN", LogLevel.Warning)]
+    [InlineData("error", LogLevel.Error)]
+    [InlineData("fatal", LogLevel.Critical)]
+    [InlineData("unknown", LogLevel.None)]
+    public void Reads_rails_log_level(string value, LogLevel expected)
+    {
+        Assert.Equal(expected, root.Settings(("RAILS_LOG_LEVEL", value)).LogLevel);
+    }
+
+    [Fact]
+    public void An_unknown_log_level_is_rejected_as_rails_rejects_it()
+    {
+        var error = Assert.Throws<SettingsException>(() => root.Settings(("RAILS_LOG_LEVEL", "loud")));
+        Assert.Contains("RAILS_LOG_LEVEL", error.Message, StringComparison.Ordinal);
     }
 }

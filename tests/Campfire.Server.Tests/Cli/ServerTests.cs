@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.Hosting.Server;
 using Microsoft.AspNetCore.Hosting.Server.Features;
 using Microsoft.AspNetCore.Http.Features;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 
 namespace Campfire.Server.Tests.Cli;
 
@@ -114,5 +115,20 @@ public sealed class ServerTests : IAsyncLifetime
         Assert.Same(database, app.Services.GetRequiredService<SqliteDatabase>());
         var messages = await database.ReadAsync(session => session.Scalar<long>("SELECT COUNT(*) FROM messages"), TestContext.Current.CancellationToken);
         Assert.True(messages > 0);
+    }
+
+    // The request lines come from Microsoft.AspNetCore.Hosting.Diagnostics at Information.
+    [Theory]
+    [InlineData(null, true)]
+    [InlineData("info", true)]
+    [InlineData("warn", false)]
+    public async Task Rails_log_level_sets_what_the_server_logs(string? level, bool requestLines)
+    {
+        await Boot(("RAILS_LOG_LEVEL", level));
+
+        var logger = app.Services.GetRequiredService<ILoggerFactory>().CreateLogger("Microsoft.AspNetCore.Hosting.Diagnostics");
+
+        Assert.Equal(requestLines, logger.IsEnabled(LogLevel.Information));
+        Assert.True(logger.IsEnabled(LogLevel.Warning));
     }
 }

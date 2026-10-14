@@ -28,6 +28,21 @@ The reference image must be built from this repo's `reference/` (our pin), not
 Add `rust` to `--apps` (with `RUST_IMAGE`, from `reference-rust/parity/bin/candidate build`) for a
 third column measured on the same box.
 
+### Thruster and logging
+
+Both images start through `bin/boot`, so Thruster is in front of both apps and proxies every
+request. On this harness it costs about 0.5 to 0.8 ms of CPU per request, more than the C# app
+spends on a page, and caps proxied routes near 4,000 requests/s on four CPUs. To measure the C#
+app without that hop, start it alone on `PORT` (which the harness already sets for it):
+
+```sh
+CSHARP_EXTRA_ENV="CAMPFIRE_THRUSTER=0" bench/bin/run --apps reference,csharp
+```
+
+Rails is still measured behind its own Thruster. The harness passes `RAILS_LOG_LEVEL=warn` to every
+app, and the C# server honours it as Rails does (`info` when unset); at `info` it logs two lines
+per request, which is a measurable share of its CPU.
+
 Each rep runs each app in turn, never two at once, alternating the order between reps: a fresh
 copy of the seed, a fresh container pinned to `SERVER_CPUS` (default 8-11, four threads per app),
 then cold start, idle memory, the HTTP suite (1, 16 and 64 keep-alive connections), the Action

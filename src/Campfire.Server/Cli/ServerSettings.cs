@@ -57,6 +57,14 @@ public sealed record ServerSettings
     /// <summary><c>JOB_CONCURRENCY</c>: Resque worker count (reference/config/puma.rb).</summary>
     public int JobConcurrency { get; init; } = DefaultJobConcurrency();
 
+    /// <summary>
+    /// <c>RAILS_LOG_LEVEL</c>, <c>info</c> by default (<c>config.log_level</c> in
+    /// reference/config/environments/production.rb): the least severe line the server logs. At
+    /// <c>info</c> that includes two lines per request, which costs real throughput under load, so
+    /// the benchmark harness sets <c>warn</c> for both apps.
+    /// </summary>
+    public LogLevel LogLevel { get; init; } = LogLevel.Information;
+
     public static int DefaultJobConcurrency() =>
         Math.Max(1, (int)Math.Ceiling(Environment.ProcessorCount * 0.666));
 
@@ -103,10 +111,26 @@ public sealed record ServerSettings
             JobConcurrency = Integer("JOB_CONCURRENCY", Present("JOB_CONCURRENCY"))
                 ?? Integer("WEB_CONCURRENCY", Present("WEB_CONCURRENCY"))
                 ?? defaults.JobConcurrency,
+            LogLevel = RailsLogLevel(Present("RAILS_LOG_LEVEL")) ?? defaults.LogLevel,
             AppVersion = Present("APP_VERSION") ?? Present("GIT_REVISION") ?? defaults.AppVersion,
             GitRevision = env("GIT_REVISION"),
         };
     }
+
+    // Logger::Severity's names, which Rails accepts in any case. `unknown` sits above `fatal`, so at
+    // that level nothing the server logs gets through.
+    static LogLevel? RailsLogLevel(string? value) =>
+        value is null ? null
+        : value.ToUpperInvariant() switch
+        {
+            "DEBUG" => LogLevel.Debug,
+            "INFO" => LogLevel.Information,
+            "WARN" => LogLevel.Warning,
+            "ERROR" => LogLevel.Error,
+            "FATAL" => LogLevel.Critical,
+            "UNKNOWN" => LogLevel.None,
+            _ => throw new SettingsException($"RAILS_LOG_LEVEL must be debug, info, warn, error, fatal or unknown, not \"{value}\""),
+        };
 
     static int? Integer(string name, string? value) =>
         value is null ? null

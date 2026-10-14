@@ -74,8 +74,10 @@ public sealed class AvatarCacheTests : IDisposable
 
         var again = await GetAvatar(app, person, ifNoneMatch: first.Headers["ETag"].ToString());
 
+        // As the reference answers it (avatars.json, "initials, cached"): the same ETag, no cache headers of its own.
         Assert.Equal(304, again.Status);
-        Assert.Equal(first.Headers["Cache-Control"].ToString(), again.Headers["Cache-Control"].ToString());
+        Assert.Equal(first.Headers["ETag"].ToString(), again.Headers["ETag"].ToString());
+        Assert.Equal("no-cache", again.Headers["Cache-Control"].ToString());
     }
 
     [Fact]
@@ -111,7 +113,7 @@ public sealed class AvatarCacheTests : IDisposable
     {
         var clock = new SteppingClock(Now);
         using var cache = new AvatarCache(clock);
-        cache.Add(7, Avatar(100));
+        cache.Add(7, Avatar(100), cache.Generation);
 
         clock.Advance(AvatarCache.Lifetime - TimeSpan.FromSeconds(1));
         Assert.True(cache.TryGet(7, out _));
@@ -124,11 +126,66 @@ public sealed class AvatarCacheTests : IDisposable
     public void An_avatar_over_one_megabyte_is_not_kept()
     {
         using var cache = new AvatarCache();
-        cache.Add(1, Avatar(AvatarCache.MaxItemBytes));
-        cache.Add(2, Avatar(AvatarCache.MaxItemBytes + 1));
+        cache.Add(1, Avatar(AvatarCache.MaxItemBytes), cache.Generation);
+        cache.Add(2, Avatar(AvatarCache.MaxItemBytes + 1), cache.Generation);
 
         Assert.True(cache.TryGet(1, out _));
         Assert.False(cache.TryGet(2, out _));
+    }
+
+    [Fact]
+    public void Evicting_a_person_forgets_only_them()
+    {
+        using var cache = new AvatarCache();
+        cache.Add(1, Avatar(100), cache.Generation);
+        cache.Add(2, Avatar(100), cache.Generation);
+
+        cache.Evict(1);
+
+        Assert.False(cache.TryGet(1, out _));
+        Assert.True(cache.TryGet(2, out _));
+    }
+
+    [Fact]
+    public void An_avatar_loaded_before_an_eviction_is_not_kept()
+    {
+        using var cache = new AvatarCache();
+        var loadedAt = cache.Generation;
+        // Another request replaces the avatar while this one is still reading the old one.
+        cache.Evict(1);
+
+        cache.Add(1, Avatar(100), loadedAt);
+        Assert.False(cache.TryGet(1, out _));
+
+        cache.Add(1, Avatar(100), cache.Generation);
+        Assert.True(cache.TryGet(1, out _));
+    }
+
+    [Fact]
+    public async Task A_profile_update_replaces_the_cached_avatar()
+    {
+        var me = (long)app.Scalar($"SELECT user_id FROM sessions WHERE token = '{david}'")!;
+        // An old updated_at, so the update below certainly moves the ETag (the clock here is fixed).
+        using (var connection = app.Open())
+        {
+            using var command = connection.CreateCommand();
+            command.CommandText = $"UPDATE users SET updated_at = '2020-01-01 00:00:00.000000' WHERE id = {me}";
+            command.ExecuteNonQuery();
+        }
+        var before = await GetAvatar(app, me);
+        Assert.True(app.App.Avatars.TryGet(me, out _));
+
+        var update = await app.SendAsync("PATCH", "/users/me/profile", app.SignedIn(david), "user%5Bname%5D=Zed+Zed");
+        Assert.Equal(302, update.Status);
+        Assert.False(app.App.Avatars.TryGet(me, out _));
+
+        var after = await GetAvatar(app, me);
+        Assert.Equal(200, after.Status);
+        Assert.NotEqual(before.Headers["ETag"].ToString(), after.Headers["ETag"].ToString());
+        if (before.Body.StartsWith("<svg", StringComparison.Ordinal))
+        {
+            Assert.Contains("ZZ", after.Body, StringComparison.Ordinal);
+        }
     }
 
     static CachedAvatar Avatar(int bytes) => new("W/\"etag\"", AvatarKind.Upload, "avatar.webp", "image/webp", new byte[bytes]);

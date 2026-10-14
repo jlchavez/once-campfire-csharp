@@ -48,11 +48,18 @@ public sealed class AvatarCache : IDisposable
     public const int MaxItemBytes = 1024 * 1024;
 
     readonly MemoryCache cache;
+    long generation;
 
     public AvatarCache(TimeProvider? clock = null)
     {
         cache = new MemoryCache(new MemoryCacheOptions { SizeLimit = MaxBytes, Clock = clock is null ? null : new TimeProviderClock(clock) });
     }
+
+    /// <summary>
+    /// Counts the evictions so far. Read it before loading an avatar and hand it to <see cref="Add"/>: an avatar
+    /// loaded while another was being evicted may be the very one that was just replaced.
+    /// </summary>
+    public long Generation => Volatile.Read(ref generation);
 
     public bool TryGet(long userId, out CachedAvatar avatar)
     {
@@ -65,15 +72,28 @@ public sealed class AvatarCache : IDisposable
         return false;
     }
 
-    /// <summary>Keeps <paramref name="avatar"/> for <see cref="Lifetime"/>, unless it is too big.</summary>
-    public void Add(long userId, CachedAvatar avatar)
+    /// <summary>
+    /// Keeps <paramref name="avatar"/> for <see cref="Lifetime"/>, unless it is too big or an eviction has
+    /// happened since <paramref name="loadedAt"/> (the <see cref="Generation"/> before it was loaded).
+    /// </summary>
+    public void Add(long userId, CachedAvatar avatar, long loadedAt)
     {
         ArgumentNullException.ThrowIfNull(avatar);
-        if (avatar.Body.Length > MaxItemBytes)
+        if (avatar.Body.Length > MaxItemBytes || loadedAt != Generation)
         {
             return;
         }
         cache.Set(new AvatarKey(userId), avatar, new MemoryCacheEntryOptions { AbsoluteExpirationRelativeToNow = Lifetime, Size = avatar.Size });
+    }
+
+    /// <summary>
+    /// Forgets the person's avatar, for when they or their avatar change, so the next request reads the new one.
+    /// (Thruster would keep serving the old one until its 30 minutes were up; the profile page says as much.)
+    /// </summary>
+    public void Evict(long userId)
+    {
+        Interlocked.Increment(ref generation);
+        cache.Remove(new AvatarKey(userId));
     }
 
     public void Dispose() => cache.Dispose();

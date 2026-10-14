@@ -45,6 +45,7 @@ public sealed class UsersAvatarsController : ApplicationController
     {
         var user = c.Current.User ?? throw new InvalidOperationException("undefined method 'avatar' for nil");
         await c.WriteAsync(tx => DetachAvatar(tx, c.App.RequireSeams().Jobs, user.Id, c.Now)).ConfigureAwait(false);
+        c.App.Avatars.Evict(user.Id);
         c.RedirectTo(Routes.UserProfileUrl(c.UrlBase));
     });
 
@@ -65,6 +66,7 @@ public sealed class UsersAvatarsController : ApplicationController
             return;
         }
 
+        var loadedAt = avatars.Generation;
         var user = await ReadAsync(session => Users.Find(session, id)).ConfigureAwait(false)
             ?? throw new RecordNotFoundException($"Couldn't find User with 'id'={id}");
         var etag = CacheKeys.Record("users", user.Id, user.UpdatedAt);
@@ -73,7 +75,7 @@ public sealed class UsersAvatarsController : ApplicationController
             return;
         }
         var avatar = await LoadAsync(user, etag).ConfigureAwait(false);
-        avatars.Add(id, avatar);
+        avatars.Add(id, avatar, loadedAt);
         Respond(avatar);
     }
 

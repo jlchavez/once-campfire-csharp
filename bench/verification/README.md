@@ -27,14 +27,12 @@ Published numbers are in [`../RESULTS.md`](../RESULTS.md).
 The production image runs Thruster in front of Kestrel, as the reference does, and the harness
 measures that port. Go, Rust and C serve HTTP from the app process instead, and on these four
 CPUs Thruster caps C# reads at about a third of what Kestrel serves directly. To measure the
-app itself, build [`Dockerfile.direct`](Dockerfile.direct) on top of an image and pass it as
-`CSHARP_IMAGE`: its `bin/boot` runs `campfire server` on `HTTP_PORT` with no Thruster. Label
-such results "C# (Kestrel, no Thruster)"; they are not the ONCE image.
+app itself, turn Thruster off with `CSHARP_BENCH_ENV`; the app then listens on `HTTP_PORT`,
+where Thruster would. Label such results "C# (Kestrel, no Thruster)"; it is not how the image
+runs by default.
 
 ```sh
-docker build -f bench/verification/Dockerfile.direct --build-arg BASE_IMAGE=campfire-csharp:app \
-  -t campfire-csharp:app-direct bench/verification
-CSHARP_IMAGE=campfire-csharp:app-direct bench/verification/run bench normal "$PWD/bench/results/<name>"
+CSHARP_BENCH_ENV='{"CAMPFIRE_THRUSTER":"0"}' bench/verification/run bench normal "$PWD/bench/results/<name>"
 ```
 
 ```sh

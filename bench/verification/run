@@ -75,6 +75,10 @@ build_loadgen() {
 in_runner() {
   local work=$1
   shift
+  # CSHARP_BENCH_ENV (JSON) is merged into the C# app's environment by bench/compare.rb, e.g.
+  # '{"CAMPFIRE_THRUSTER":"0"}'. Passed only when set: compare.rb cannot parse an empty value.
+  local extra=()
+  [ -z "${CSHARP_BENCH_ENV:-}" ] || extra=(-e "CSHARP_BENCH_ENV=$CSHARP_BENCH_ENV")
   docker run --rm --network host --cpuset-cpus "$RUNNER_CPUS" \
     --user "$(id -u):$(id -g)" \
     --group-add "$(stat -c %g /var/run/docker.sock)" \
@@ -87,6 +91,7 @@ in_runner() {
     -e RAILS_IMAGE="$RAILS_IMAGE" \
     -e CSHARP_IMAGE="$CSHARP_IMAGE" \
     -e LOADGEN="$LOADGEN" \
+    "${extra[@]}" \
     -v /var/run/docker.sock:/var/run/docker.sock \
     -v /usr/bin/docker:/usr/bin/docker:ro \
     -v /tmp:/tmp \
@@ -189,6 +194,7 @@ write_provenance() {
     echo "csharp_image: $CSHARP_IMAGE"
     docker image inspect -f 'csharp_id: {{.Id}}' "$CSHARP_IMAGE"
     docker image inspect -f '{{range .Config.Env}}{{println .}}{{end}}' "$CSHARP_IMAGE" | awk -F= '/^(GIT_REVISION|APP_VERSION|DOTNET_)/'
+    echo "csharp_bench_env: ${CSHARP_BENCH_ENV:-}"
     echo -n "csharp_binary_sha256: "
     docker run --rm --entrypoint sha256sum "$CSHARP_IMAGE" /app/campfire
     echo "runner_image: $RUNNER_IMAGE"
